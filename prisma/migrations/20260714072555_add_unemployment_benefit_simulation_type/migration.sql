@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "SimulationType" ADD VALUE 'UNEMPLOYMENT_BENEFIT';

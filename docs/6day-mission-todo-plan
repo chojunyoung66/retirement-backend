@@ -1,0 +1,125 @@
+# 6일 미션 수행 계획서: 풀스택 은퇴 재무 시뮬레이터 프로젝트
+
+> **업데이트:** 이 계획서는 `backend-structure-plan.md`에서 정의한 **Prisma+Express 4계층 아키텍처**를 기준으로 재작성되었습니다. 이전의 tRPC+Drizzle 기술 스택은 제거되었습니다.
+
+## 프로젝트 개요
+
+본 프로젝트는 6일간의 스프린트 미션을 통해 풀스택 은퇴 재무 시뮬레이터를 개발하는 것을 목표로 합니다. 프론트엔드 MVP를 기반으로 백엔드 기능을 구현하고, 프론트엔드와 연동하여 실제 데이터를 처리하고 저장하며, 최종적으로 외부에서 접근 가능한 환경으로 배포합니다. 이 과정을 통해 클라이언트-서버 구조를 갖춘 실제 웹 서비스 형태를 완성하고, 은퇴 재무 설계에 필요한 핵심 기능을 제공합니다.
+
+## 프로젝트 목표
+
+* **프론트엔드-백엔드 연동:** 미션 6에서 구현된 프론트엔드와 실제 백엔드 API를 연결하여 동적인 데이터 처리 구현.
+* **핵심 백엔드 기능 구현:** 은퇴 목표 설정, 건강보험료 시뮬레이션, ISA 절세 분석, 퇴직연금/개인연금 포트폴리오 관리 등 핵심 API 개발.
+* **인증 및 보안:** JWT 기반의 사용자 인증 흐름 구현 및 API 보호.
+* **배포 및 문서화:** 개발된 백엔드 서비스를 외부 환경에 배포하고, API 문서를 작성하여 협업 효율 증대.
+* **일관된 스타일:** 우아하고 완성도 높은(Elegant and Perfect) 스타일을 UI 및 문서 전반에 적용하여 사용자 경험 향상.
+
+## 기술 스택
+
+* **프론트엔드:** React 19, TypeScript, TailwindCSS, shadcn/ui
+* **백엔드:** Node.js, TypeScript, Express 5, Prisma ORM
+* **데이터베이스:** PostgreSQL
+* **인증:** JWT (bcrypt 암호화)
+* **검증:** Zod
+* **테스트:** Jest (TDD 기반)
+* **배포:** render의 comazon 리포지토리 연동
+
+## 미션 수행 계획 (Day-by-Day)
+
+### Day 1 - 프로젝트 설계 및 환경 구성
+
+* **목표:** 프로젝트의 기반을 다지고 개발 환경을 설정합니다.
+* **세부 과제:**
+
+  * 6일 미션 수행 계획서 작성 (본 문서)
+  * 데이터 모델 설계: 은퇴 목표, 건강보험료, ISA, 연금 관련 데이터를 저장할 테이블 스키마 정의.
+  * 개발 및 배포 환경 분리: `.env` 파일을 활용하여 환경별 설정 관리.
+* **산출물:** `6_day_mission_plan.md`, `drizzle/schema.ts` 업데이트, `.env` 설정 확인.
+
+### Day 2 - 핵심 API 구현 (1)
+
+* **목표:** 은퇴 재무 시뮬레이터의 핵심 기능 중 일부를 백엔드 API로 구현합니다.
+* **세부 과제:**
+
+  * **공유 계층 구성:** `shared/` 폴더에 예외 클래스, bcrypt 유틸, JWT 유틸 구현 (TDD 기반).
+  * **은퇴 목표 설정 API:**
+    - `application/services/retirement-goal.service.ts` 구현 (TDD)
+    - `application/contracts/retirement-goal-repo.contract.ts` 인터페이스 정의
+    - `outbound/repos/retirement-goal.repo.ts` DB 접근 로직
+    - `inbound/controllers/retirement-goal.controller.ts` 라우팅 및 요청/응답 처리
+  * **건강보험료 시뮬레이션 API:**
+    - `application/domain/health-insurance.ts` 계산 로직 구현
+    - `application/services/health-insurance.service.ts` 구현 (TDD)
+    - `inbound/controllers/health-insurance.controller.ts` 라우팅
+* **산출물:** shared/, application/, inbound/, outbound/ 구조 완성 및 테스트 통과.
+
+### Day 3 - 핵심 API 구현 (2)
+
+* **목표:** 추가적인 핵심 재무 시뮬레이션 기능을 백엔드 API로 구현합니다.
+* **세부 과제:**
+
+  * **ISA 절세 분석 API:**
+    - `application/domain/isa-simulation.ts` 계산 로직 구현
+    - `application/services/isa-simulation.service.ts` 구현 (TDD)
+    - `inbound/controllers/isa-simulation.controller.ts` 라우팅
+  * **연금 포트폴리오 관리 API:**
+    - `application/services/pension-portfolio.service.ts` 구현 (TDD)
+    - `outbound/repos/portfolio.repo.ts` DB 접근 로직
+    - `inbound/controllers/pension-portfolio.controller.ts` 라우팅
+* **산출물:** 모든 시뮬레이션 및 포트폴리오 관련 서비스 완성 및 테스트 통과.
+
+### Day 4 - 인증 및 API 통합
+
+* **목표:** 사용자 인증을 구현하고 전체 API를 통합하여 실제 동작하도록 만듭니다.
+* **세부 과제:**
+
+  * **인증 서비스 구현:**
+    - `application/services/auth.service.ts` 구현 (회원가입, 로그인 TDD)
+    - `application/contracts/user-repo.contract.ts` 사용자 DB 접근 계약
+    - `outbound/repos/user.repo.ts` 사용자 저장소 구현
+  * **인증 미들웨어 및 요청 검증:**
+    - `inbound/middlewares/auth.middleware.ts` JWT 검증 미들웨어
+    - `inbound/middlewares/error.middleware.ts` 에러 처리 미들웨어
+    - `inbound/schemas/auth.schemas.ts` Zod 기반 요청 검증
+  * **Express 부트스트랩:**
+    - `application/bootstrap.ts` 의존성 주입 설정
+    - `application/index.ts` 앱 초기화 및 라우팅 통합
+* **산출물:** 모든 컨트롤러 통합, 인증 플로우 완성, Jest 테스트 통과.
+
+### Day 5 - 프론트엔드 연동
+
+* **목표:** 개발된 백엔드 API와 프론트엔드를 연결하여 실제 서비스처럼 동작하도록 합니다.
+* **세부 과제:**
+
+  * **API 환경 변수 설정:** 백엔드 서버 주소를 프론트엔드 환경 변수로 설정.
+  * **Mock Data 제거 후 실제 API 연결:** 프론트엔드에서 사용하던 가짜 데이터를 제거하고 백엔드 REST API 호출로 대체.
+  * **인증 플로우 통합:** JWT 토큰 저장/관리, 로그인/로그아웃 UI와 백엔드 인증 연동.
+  * **은퇴 목표 · 시뮬레이션 · 포트폴리오 대시보드 UI:** 사용자가 자신의 은퇴 재무 현황을 한눈에 볼 수 있는 대시보드 개발.
+  * **정상 / 비정상 응답 피드백:** API 응답에 따라 성공 메시지, 에러 메시지 등을 사용자에게 시각적으로 피드백.
+* **산출물:** 모든 API 엔드포인트 연동 완료, E2E 테스트 통과.
+
+### Day 6 - 배포 및 문서화
+
+* **목표:** 완성된 서비스를 외부 환경에 배포하고, API 문서를 작성하여 프로젝트를 마무리합니다.
+* **세부 과제:**
+
+  * **프로덕션 빌드 및 배포:** Render 등 클라우드 플랫폼을 활용하여 백엔드 서버 배포.
+  * **배포된 API 주소를 프론트엔드에 적용:** 프로덕션 환경 변수 업데이트.
+  * **API 문서 작성:** `README.md`에 다음 내용 기록:
+    - 프로젝트 개요 및 기술 스택
+    - 설치 및 실행 방법 (`npm install`, `npm run dev`, `npm run type`)
+    - Prisma 마이그레이션 방법
+    - 각 API 엔드포인트 정보 (메서드, 경로, 요청/응답 형식)
+    - 환경 변수 설명
+  * **최종 점검:** 배포된 서비스 E2E 테스트, 로그 모니터링.
+* **산출물:** 배포된 서비스 URL, 완성된 `README.md`.
+
+## 스타일 방향
+
+프로젝트 전반에 걸쳐 **우아하고 완성도 높은(Elegant and Perfect)** 스타일을 유지합니다. UI는 시각적으로 세련되고 정돈된 인상을 주며, 대시보드 역시 고급스러운 레이아웃과 깔끔한 타이포그래피를 적용합니다. 문서화 또한 명확하고 전문적인 어조로 작성하여 일관된 브랜드 경험을 제공합니다.
+
+## 추가 제약 사항
+
+* 미션은 반드시 Day 1부터 Day 6까지 순서대로 하루 단위로 진행합니다.
+* 각 Day의 산출물이 명확히 완료된 후 다음 Day로 넘어갑니다.
+* 계획서(Day 1)를 먼저 작성하고 이후 실행의 기준으로 삼습니다.
