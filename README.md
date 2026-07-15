@@ -1,7 +1,9 @@
 # retirement-backend
 
-은퇴 재무 시뮬레이션 백엔드 API 서버입니다. 
+은퇴 재무 시뮬레이션 백엔드 API 서버입니다.
 국민연금, 건강보험, 퇴직금, 실업급여 등 노후 대비에 필요한 금융 계산 기능을 제공합니다.
+
+- **배포 서버:** https://retirement-backend-1.onrender.com
 
 ## 기술 스택
 
@@ -71,6 +73,7 @@ src/
 | GET | `/api/simulations/isa/latest` | 최근 결과 조회 |
 | POST | `/api/simulations/irp` | IRP 시뮬레이션 |
 | GET | `/api/simulations/irp/latest` | 최근 결과 조회 |
+| PATCH | `/api/simulations/:id` | 시뮬레이션 상태 수정 (`draft` \| `confirmed`) |
 
 ### 연금 포트폴리오 (인증 필요)
 | Method | Path | 설명 |
@@ -96,10 +99,18 @@ src/
 
 `.env` 파일을 생성하고 아래 값을 설정합니다.
 
+`.env.example`을 참고하여 `.env` 파일을 생성합니다.
+
 ```env
-DATABASE_URL=postgresql://user:password@localhost:5432/retirement
-JWT_SECRET=your_jwt_secret
+DATABASE_URL="postgresql://USER@localhost:5432/DB_NAME?schema=public"
+JWT_SECRET="충분히 긴 랜덤 문자열"
 PORT=3000
+NODE_ENV=development
+```
+
+JWT_SECRET 생성:
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
 ### 설치 및 실행
