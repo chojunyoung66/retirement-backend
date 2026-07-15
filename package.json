@@ -3,7 +3,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "npx tsc && node dist/index.js",
     "format": "prettier --write .",
     "lint": "eslint .",
