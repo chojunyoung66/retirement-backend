@@ -8,6 +8,9 @@
 | 엔드포인트 | 결과 |
 |-----------|------|
 | `POST /api/auth/signup` | 정상 |
+| `POST /api/auth/signup` (한글 이메일) | 차단 |
+| `POST /api/auth/signup` (국제 도메인) | 차단 |
+| `POST /api/auth/signup` (형식 오류) | 차단 |
 | `POST /api/auth/signin` | 정상 |
 
 ## 유저 API
