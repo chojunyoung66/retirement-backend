@@ -77,3 +77,7 @@ export const unemploymentBenefitSimulationSchema = z.object({
 });
 
 export type UnemploymentBenefitSimulationData = z.infer<typeof unemploymentBenefitSimulationSchema>;
+
+export const simulationUpdateSchema = z.object({
+  status: z.enum(["draft", "confirmed"], { error: "status는 draft 또는 confirmed여야 합니다" }),
+});

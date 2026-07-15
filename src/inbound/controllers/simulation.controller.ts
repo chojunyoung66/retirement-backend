@@ -8,6 +8,7 @@ import {
   irpSimulationSchema,
   severancePaySimulationSchema,
   unemploymentBenefitSimulationSchema,
+  simulationUpdateSchema,
 } from "../schemas/simulation.schemas.js";
 
 export const createSimulationController = (simulationService: SimulationServiceType) => {
@@ -478,6 +479,31 @@ export const createSimulationController = (simulationService: SimulationServiceT
 
       const latest = await simulationService.getLatestUnemploymentBenefit(userId);
       res.status(200).json({ success: true, data: latest });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // PATCH /api/simulations/:id
+  router.patch("/:id", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.userId;
+      if (!userId) throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
+
+      const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const simulationId = parseInt(rawId, 10);
+      if (isNaN(simulationId)) throw new BusinessException("INVALID_REQUEST", "유효한 시뮬레이션 ID가 아닙니다", 400);
+
+      // 요청 검증
+      const validation = simulationUpdateSchema.safeParse(req.body);
+      if (!validation.success) {
+        const message = validation.error.issues.map((i) => i.message).join(", ");
+        throw new BusinessException("INVALID_REQUEST", message || "요청 데이터가 유효하지 않습니다", 400);
+      }
+
+      const updated = await simulationService.updateSimulation(simulationId, validation.data);
+
+      res.status(200).json({ success: true, data: updated });
     } catch (error) {
       next(error);
     }

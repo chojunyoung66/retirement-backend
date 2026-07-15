@@ -9,7 +9,9 @@ describe("SimulationService", () => {
     // 의존성 Mock 설정
     mockSimulationRepo = {
       findLatestByUserId: jest.fn(),
+      findById: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     };
 
     simulationService = createSimulationService(mockSimulationRepo as ISimulationRepo);
@@ -503,6 +505,76 @@ describe("SimulationService", () => {
         inputData,
         outputData,
       });
+    });
+  });
+
+  describe("updateSimulation", () => {
+    it("존재하지 않는 시뮬레이션 ID로 수정 시 SIMULATION_NOT_FOUND 예외 발생", async () => {
+      // given
+      const id = 999;
+
+      (mockSimulationRepo.findById as jest.Mock).mockResolvedValueOnce(null);
+
+      // when & then
+      await expect(simulationService.updateSimulation(id, { status: "confirmed" })).rejects.toMatchObject({
+        code: "SIMULATION_NOT_FOUND",
+        statusCode: 404,
+      });
+
+      expect(mockSimulationRepo.findById).toHaveBeenCalledWith(id);
+      expect(mockSimulationRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("허용되지 않는 status 값으로 수정 시 INVALID_STATUS 예외 발생", async () => {
+      // given
+      const id = 1;
+      const existing = {
+        id,
+        userId: 1,
+        type: "ISA" as const,
+        version: 1,
+        status: "draft",
+        inputData: {},
+        outputData: {},
+        createdAt: new Date(),
+      };
+
+      (mockSimulationRepo.findById as jest.Mock).mockResolvedValueOnce(existing);
+
+      // when & then
+      await expect(simulationService.updateSimulation(id, { status: "잘못된값" })).rejects.toMatchObject({
+        code: "INVALID_STATUS",
+        statusCode: 400,
+      });
+
+      expect(mockSimulationRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("해피패스: 시뮬레이션 status를 수정", async () => {
+      // given
+      const id = 1;
+      const data = { status: "confirmed" };
+      const existing = {
+        id,
+        userId: 1,
+        type: "ISA" as const,
+        version: 1,
+        status: "draft",
+        inputData: { annualContribution: 10000000, expectedReturnRate: 5, investmentYears: 10 },
+        outputData: { expectedProfit: 29401900, estimatedTaxSaving: 1815104, notice: "..." },
+        createdAt: new Date(),
+      };
+      const updatedResult = { ...existing, status: "confirmed" };
+
+      (mockSimulationRepo.findById as jest.Mock).mockResolvedValueOnce(existing);
+      (mockSimulationRepo.update as jest.Mock).mockResolvedValueOnce(updatedResult);
+
+      // when
+      const result = await simulationService.updateSimulation(id, data);
+
+      // then
+      expect(mockSimulationRepo.update).toHaveBeenCalledWith(id, data);
+      expect(result).toEqual(updatedResult);
     });
   });
 

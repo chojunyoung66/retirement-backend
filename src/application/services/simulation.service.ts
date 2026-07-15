@@ -132,6 +132,26 @@ export const createSimulationService = (simulationRepo: ISimulationRepo) => ({
     return latest as SimulationResult;
   },
 
+  async updateSimulation(
+    id: number,
+    data: { status: string }
+  ): Promise<SimulationResult> {
+    // 존재 여부 확인
+    const existing = await simulationRepo.findById(id);
+    if (!existing) {
+      throw new BusinessException("SIMULATION_NOT_FOUND", "시뮬레이션을 찾을 수 없습니다", 404);
+    }
+
+    // 허용된 status 값 검증
+    const allowedStatuses = ["draft", "confirmed"];
+    if (!allowedStatuses.includes(data.status)) {
+      throw new BusinessException("INVALID_STATUS", `status는 ${allowedStatuses.join(", ")} 중 하나여야 합니다`, 400);
+    }
+
+    const updated = await simulationRepo.update(id, data);
+    return updated as SimulationResult;
+  },
+
   async createUnemploymentBenefit(
     userId: number,
     inputData: Record<string, unknown>,

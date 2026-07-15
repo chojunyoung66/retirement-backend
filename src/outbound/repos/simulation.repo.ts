@@ -44,6 +44,22 @@ export const createSimulationRepo = (): ISimulationRepo => ({
     }));
   },
 
+  async findById(id: number) {
+    // 시뮬레이션 단건 조회
+    const result = await prisma.simulationResult.findUnique({ where: { id } });
+    if (!result) return null;
+    return {
+      id: result.id,
+      userId: result.userId,
+      type: result.type as SimulationType,
+      version: result.version,
+      status: result.status,
+      inputData: result.inputData as Record<string, unknown>,
+      outputData: result.outputData as Record<string, unknown>,
+      createdAt: result.createdAt,
+    };
+  },
+
   async create(userId: number, type: SimulationType, inputData: Record<string, unknown>, outputData: Record<string, unknown>) {
     // 시뮬레이션 결과 생성
     const result = await prisma.simulationResult.create({
