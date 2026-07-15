@@ -1,6 +1,6 @@
 # API 테스트 결과
 
-- **테스트 일시:** 2026-07-15
+- **테스트 일시:** 2026-07-15 (전체 재검증)
 - **서버:** https://retirement-backend-1.onrender.com
 
 ## 인증 API
