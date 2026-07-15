@@ -67,11 +67,15 @@ export const createSimulationRepo = (): ISimulationRepo => ({
     };
   },
 
-  async update(id: number, data: Partial<SimulationResultData>) {
+  async update(id: number, data: Partial<Omit<SimulationResultData, "userId">>) {
     // 시뮬레이션 결과 업데이트
     const result = await prisma.simulationResult.update({
       where: { id },
-      data,
+      data: {
+        ...data,
+        ...(data.inputData !== undefined && { inputData: data.inputData as object }),
+        ...(data.outputData !== undefined && { outputData: data.outputData as object }),
+      },
     });
 
     return {
