@@ -51,3 +51,6 @@
 | `GET /api/simulations/severance-pay/latest` | 정상 |
 | `POST /api/simulations/unemployment-benefit` | 정상 |
 | `GET /api/simulations/unemployment-benefit/latest` | 정상 |
+| `PATCH /api/simulations/:id` | 정상 |
+| `PATCH /api/simulations/:id` (존재하지 않는 ID) | `SIMULATION_NOT_FOUND` 404 |
+| `PATCH /api/simulations/:id` (허용되지 않는 status) | `INVALID_REQUEST` 400 |
