@@ -1,4 +1,8 @@
-import type { ISimulationRepo, SimulationType, SimulationResultData } from "../../application/contracts/simulation-repo.contract.js";
+import type {
+  ISimulationRepo,
+  SimulationType,
+  SimulationResultData,
+} from "../../application/contracts/simulation-repo.contract.js";
 import { prisma } from "./prisma-client.js";
 import { SimulationType as PrismaSimulationType } from "@prisma/client";
 
@@ -60,7 +64,12 @@ export const createSimulationRepo = (): ISimulationRepo => ({
     };
   },
 
-  async create(userId: number, type: SimulationType, inputData: Record<string, unknown>, outputData: Record<string, unknown>) {
+  async create(
+    userId: number,
+    type: SimulationType,
+    inputData: Record<string, unknown>,
+    outputData: Record<string, unknown>,
+  ) {
     // 시뮬레이션 결과 생성
     const result = await prisma.simulationResult.create({
       data: {
@@ -83,14 +92,26 @@ export const createSimulationRepo = (): ISimulationRepo => ({
     };
   },
 
-  async update(id: number, data: Partial<Omit<SimulationResultData, "userId">>) {
+  async delete(id: number): Promise<void> {
+    // 시뮬레이션 삭제
+    await prisma.simulationResult.delete({ where: { id } });
+  },
+
+  async update(
+    id: number,
+    data: Partial<Omit<SimulationResultData, "userId">>,
+  ) {
     // 시뮬레이션 결과 업데이트
     const result = await prisma.simulationResult.update({
       where: { id },
       data: {
         ...data,
-        ...(data.inputData !== undefined && { inputData: data.inputData as object }),
-        ...(data.outputData !== undefined && { outputData: data.outputData as object }),
+        ...(data.inputData !== undefined && {
+          inputData: data.inputData as object,
+        }),
+        ...(data.outputData !== undefined && {
+          outputData: data.outputData as object,
+        }),
       },
     });
 
