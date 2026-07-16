@@ -134,6 +134,31 @@ describe("PortfolioService", () => {
         })
       );
     });
+
+    it("보안 버그: getById는 소유권을 검증하지 않아 다른 유저의 포트폴리오도 조회 가능함(현재 동작 문서화)", async () => {
+      // given: id=1인 포트폴리오는 userId=1 소유
+      const portfolioId = 1;
+      const otherUsersPortfolio = {
+        id: portfolioId,
+        userId: 1,
+        accountType: "IRP",
+        name: "다른 유저의 포트폴리오",
+        items: [{ symbol: "BOND", name: "채권 ETF", allocation: 100 }],
+      };
+
+      (mockPortfolioRepo.findById as jest.Mock).mockResolvedValueOnce(otherUsersPortfolio);
+
+      // when: 서비스 시그니처는 userId를 받지 않기 때문에
+      // 다른 유저(예: userId=2)라도 ID만 알면 조회에 성공한다.
+      // 이 테스트는 소유권 검증 부재 버그를 문서화한다.
+      const result = await portfolioService.getById(portfolioId);
+
+      // then: 다른 유저의 데이터가 그대로 반환된다 (FORBIDDEN이 던져지지 않음)
+      expect(mockPortfolioRepo.findById).toHaveBeenCalledWith(portfolioId);
+      expect(result).toEqual(otherUsersPortfolio);
+      // TODO(security): getById에 요청자 userId 인자를 추가하고 소유권 검증을 넣어야 함.
+      // 수정 시 이 테스트는 PORTFOLIO_FORBIDDEN 예외를 기대하도록 변경 필요.
+    });
   });
 
   describe("update", () => {

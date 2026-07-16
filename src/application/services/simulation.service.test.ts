@@ -736,6 +736,41 @@ describe("SimulationService", () => {
       expect(mockSimulationRepo.update).toHaveBeenCalledWith(id, data);
       expect(result).toEqual(updatedResult);
     });
+
+    it("보안 버그: updateSimulation은 소유권을 검증하지 않아 다른 유저의 시뮬레이션도 수정 가능함(현재 동작 문서화)", async () => {
+      // given: id=1인 시뮬레이션은 userId=1 소유
+      const id = 1;
+      const data = { status: "confirmed" };
+      const existing = {
+        id,
+        userId: 1,
+        type: "ISA" as const,
+        version: 1,
+        status: "draft",
+        inputData: {},
+        outputData: {},
+        createdAt: new Date(),
+      };
+      const updatedResult = { ...existing, status: "confirmed" };
+
+      (mockSimulationRepo.findById as jest.Mock).mockResolvedValueOnce(
+        existing,
+      );
+      (mockSimulationRepo.update as jest.Mock).mockResolvedValueOnce(
+        updatedResult,
+      );
+
+      // when: 서비스 시그니처는 userId를 받지 않기 때문에
+      // 다른 유저(예: userId=2)라도 ID만 알면 update가 성공한다.
+      // 이 테스트는 소유권 검증 부재 버그를 문서화한다.
+      const result = await simulationService.updateSimulation(id, data);
+
+      // then: update가 그대로 호출되고 성공한다 (FORBIDDEN이 던져지지 않음)
+      expect(mockSimulationRepo.update).toHaveBeenCalledWith(id, data);
+      expect(result).toEqual(updatedResult);
+      // TODO(security): updateSimulation에 userId 인자를 추가하고 소유권 검증을 넣어야 함.
+      // 수정 시 이 테스트는 FORBIDDEN 예외를 기대하도록 변경 필요.
+    });
   });
 
   describe("getLatestUnemploymentBenefit", () => {
