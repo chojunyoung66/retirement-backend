@@ -116,5 +116,25 @@ describe("UserService", () => {
       // repo.update가 호출되지 않아야 함 (사전 검증에서 실패)
       expect(mockUserRepo.update).not.toHaveBeenCalled();
     });
+
+    // TODO(bug): 현재 updateProfile은 `!data.name && !data.password` 로 falsy 검사만 한다.
+    //   따라서 name="" (빈 문자열) 처럼 "필드는 제공되었지만 값이 falsy"인 경우도
+    //   업데이트 필드가 없는 것으로 간주되어 INVALID_UPDATE가 던져진다.
+    //   진짜 의도는 "필드 존재 여부"를 봐야 하므로 향후 수정 필요.
+    //   본 테스트는 현재(버그 있는) 동작을 문서화하기 위함이다.
+    it("[BUG-DOC] name='' (빈 문자열)을 넘기면 falsy 검사로 인해 INVALID_UPDATE가 발생 (현재 동작)", async () => {
+      // given
+      const userId = 1;
+      const dataWithEmptyName = { name: "" };
+
+      // when & then: 실제로는 name 필드를 제공했지만, 현재 코드는 빈 문자열을 "없음"으로 취급
+      await expect(userService.updateProfile(userId, dataWithEmptyName)).rejects.toMatchObject({
+        code: "INVALID_UPDATE",
+        statusCode: 400,
+      });
+
+      // 사전 검증 실패로 repo.update는 호출되지 않음
+      expect(mockUserRepo.update).not.toHaveBeenCalled();
+    });
   });
 });

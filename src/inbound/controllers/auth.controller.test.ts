@@ -89,6 +89,93 @@ describe("AuthController", () => {
       expect(response.body.success).toBe(false);
     });
 
+    it("이름이 빈 문자열이면 검증 실패 (min 1)", async () => {
+      const response = await request(app).post("/auth/signup").send({
+        email: "test@example.com",
+        password: "password123",
+        name: "",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
+      expect(response.body.error.message).toContain("이름");
+    });
+
+    it("이름이 51자 이상이면 검증 실패 (max 50 초과)", async () => {
+      const response = await request(app).post("/auth/signup").send({
+        email: "test@example.com",
+        password: "password123",
+        name: "a".repeat(51),
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
+      expect(response.body.error.message).toContain("50자");
+    });
+
+    it("경계값: 이름이 정확히 50자면 회원가입 성공", async () => {
+      // given
+      const boundaryName = "a".repeat(50);
+      const signupData = {
+        email: "boundary50@example.com",
+        password: "password123",
+        name: boundaryName,
+      };
+      const mockResult = {
+        id: 2,
+        email: signupData.email,
+        name: boundaryName,
+        token: "jwt_token_boundary",
+      };
+
+      (mockAuthService.signup as jest.Mock).mockResolvedValueOnce(mockResult);
+
+      // when
+      const response = await request(app).post("/auth/signup").send(signupData);
+
+      // then
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual(mockResult);
+      expect(mockAuthService.signup).toHaveBeenCalledWith(
+        signupData.email,
+        signupData.password,
+        boundaryName
+      );
+    });
+
+    it("경계값: 비밀번호가 정확히 8자면 회원가입 성공", async () => {
+      // given
+      const signupData = {
+        email: "boundary-pw@example.com",
+        password: "12345678",
+        name: "테스트유저",
+      };
+      const mockResult = {
+        id: 3,
+        email: signupData.email,
+        name: signupData.name,
+        token: "jwt_token_pw8",
+      };
+
+      (mockAuthService.signup as jest.Mock).mockResolvedValueOnce(mockResult);
+
+      // when
+      const response = await request(app).post("/auth/signup").send(signupData);
+
+      // then
+      expect(response.status).toBe(201);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual(mockResult);
+      expect(mockAuthService.signup).toHaveBeenCalledWith(
+        signupData.email,
+        signupData.password,
+        signupData.name
+      );
+    });
+
     it("중복된 이메일로 회원가입 시 409 반환", async () => {
       // given
       const signupData = {
@@ -161,6 +248,16 @@ describe("AuthController", () => {
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
+    });
+
+    it("비밀번호가 없으면 검증 실패", async () => {
+      const response = await request(app).post("/auth/signin").send({
+        email: "test@example.com",
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
     });
 
     it("잘못된 이메일/비밀번호는 401 반환", async () => {

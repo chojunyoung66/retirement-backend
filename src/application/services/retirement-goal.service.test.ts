@@ -70,6 +70,21 @@ describe("RetirementGoalService", () => {
       expect(mockRetirementGoalRepo.findByUserId).toHaveBeenCalledWith(userId);
       expect(result).toEqual(expectedGoal);
     });
+
+    it("정년 목표가 없는 사용자를 조회하면 RETIREMENT_GOAL_NOT_FOUND 예외 발생", async () => {
+      // given
+      const userId = 9999;
+
+      (mockRetirementGoalRepo.findByUserId as jest.Mock).mockResolvedValueOnce(null);
+
+      // when & then
+      await expect(retirementGoalService.getByUserId(userId)).rejects.toMatchObject({
+        code: "RETIREMENT_GOAL_NOT_FOUND",
+        statusCode: 404,
+      });
+
+      expect(mockRetirementGoalRepo.findByUserId).toHaveBeenCalledWith(userId);
+    });
   });
 
   describe("update", () => {
@@ -234,6 +249,52 @@ describe("RetirementGoalService", () => {
       // then
       expect(mockRetirementGoalRepo.findByUserId).toHaveBeenCalledWith(userId);
       expect(mockRetirementGoalRepo.deleteByUserId).toHaveBeenCalledWith(userId);
+    });
+
+    it("존재하지 않는 정년 목표를 삭제 시 RETIREMENT_GOAL_NOT_FOUND 예외 발생", async () => {
+      // given
+      const userId = 9999;
+
+      (mockRetirementGoalRepo.findByUserId as jest.Mock).mockResolvedValueOnce(null);
+
+      // when & then
+      await expect(retirementGoalService.delete(userId)).rejects.toMatchObject({
+        code: "RETIREMENT_GOAL_NOT_FOUND",
+        statusCode: 404,
+      });
+
+      expect(mockRetirementGoalRepo.findByUserId).toHaveBeenCalledWith(userId);
+      // 존재하지 않으면 실제 삭제가 호출되지 않아야 함
+      expect(mockRetirementGoalRepo.deleteByUserId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("경계값/이상 데이터", () => {
+    // TODO: 서비스 레이어는 현재 birthYear/retirementYear의 논리적 관계를 검증하지 않음.
+    //       retirementYear < birthYear 같은 비논리적 데이터도 그대로 저장/업데이트됨.
+    //       추후 정책 확정 후 domain-level validation을 추가할 것.
+    it("retirementYear가 birthYear보다 이전이어도 서비스는 그대로 생성 허용 (현재 동작 문서화)", async () => {
+      // given
+      const userId = 1;
+      const invalidGoalData: RetirementGoalData = {
+        birthYear: 2000,
+        retirementYear: 1990, // birthYear 이전
+        monthlyLivingExpense: 3000000,
+        nationalPension: 1500000,
+        retirementAsset: 500000000,
+      };
+
+      (mockRetirementGoalRepo.create as jest.Mock).mockResolvedValueOnce({
+        id: 1,
+        ...invalidGoalData,
+      });
+
+      // when
+      const result = await retirementGoalService.create(userId, invalidGoalData);
+
+      // then: 서비스가 현재 이 케이스를 막지 않음 (검증 로직 부재)
+      expect(mockRetirementGoalRepo.create).toHaveBeenCalledWith(userId, invalidGoalData);
+      expect(result).toEqual({ id: 1, ...invalidGoalData });
     });
   });
 });
