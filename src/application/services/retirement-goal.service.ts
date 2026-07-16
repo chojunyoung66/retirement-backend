@@ -43,6 +43,17 @@ export const createRetirementGoalService = (retirementGoalRepo: IRetirementGoalR
 
     return updatedGoal;
   },
+
+  async delete(userId: number): Promise<void> {
+    // 정년 목표 존재 검증
+    const existingGoal = await retirementGoalRepo.findByUserId(userId);
+    if (!existingGoal) {
+      throw new BusinessException("RETIREMENT_GOAL_NOT_FOUND", "정년 목표를 찾을 수 없습니다", 404);
+    }
+
+    // 정년 목표 삭제
+    await retirementGoalRepo.deleteByUserId(userId);
+  },
 });
 
 export type RetirementGoalServiceType = ReturnType<typeof createRetirementGoalService>;

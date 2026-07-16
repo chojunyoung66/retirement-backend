@@ -11,6 +11,7 @@ describe("RetirementGoalService", () => {
       findByUserId: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      deleteByUserId: jest.fn(),
     };
 
     retirementGoalService = createRetirementGoalService(
@@ -194,6 +195,7 @@ describe("RetirementGoalService", () => {
     });
 
     it("업데이트할 필드가 없을 때({}) INVALID_UPDATE 예외 발생", async () => {
+
       // given
       const userId = 1;
       const emptyData = {};
@@ -207,6 +209,31 @@ describe("RetirementGoalService", () => {
       // repo 호출이 없어야 함 (사전 검증에서 실패)
       expect(mockRetirementGoalRepo.findByUserId).not.toHaveBeenCalled();
       expect(mockRetirementGoalRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("delete", () => {
+    it("해피패스: 사용자의 정년 목표를 삭제", async () => {
+      // given
+      const userId = 1;
+      const existingGoal = {
+        id: 1,
+        birthYear: 1980,
+        retirementYear: 2045,
+        monthlyLivingExpense: 3000000,
+        nationalPension: 1500000,
+        retirementAsset: 500000000,
+      };
+
+      (mockRetirementGoalRepo.findByUserId as jest.Mock).mockResolvedValueOnce(existingGoal);
+      (mockRetirementGoalRepo.deleteByUserId as jest.Mock).mockResolvedValueOnce(undefined);
+
+      // when
+      await retirementGoalService.delete(userId);
+
+      // then
+      expect(mockRetirementGoalRepo.findByUserId).toHaveBeenCalledWith(userId);
+      expect(mockRetirementGoalRepo.deleteByUserId).toHaveBeenCalledWith(userId);
     });
   });
 });

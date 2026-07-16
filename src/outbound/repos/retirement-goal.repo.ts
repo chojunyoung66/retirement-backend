@@ -55,6 +55,11 @@ export const createRetirementGoalRepo = (): IRetirementGoalRepo => ({
       retirementAsset: goal.retirementAsset,
     };
   },
+
+  async deleteByUserId(userId: number): Promise<void> {
+    // 정년 목표 삭제
+    await prisma.retirementGoal.delete({ where: { userId } });
+  },
 });
 
 export type RetirementGoalRepoType = ReturnType<typeof createRetirementGoalRepo>;

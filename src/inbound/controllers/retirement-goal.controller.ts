@@ -80,6 +80,23 @@ export const createRetirementGoalController = (retirementGoalService: Retirement
     }
   });
 
+  // DELETE /api/retirement-goals/me
+  router.delete("/me", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.userId;
+
+      if (!userId) {
+        throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
+      }
+
+      await retirementGoalService.delete(userId);
+
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  });
+
   return { router };
 };
 
