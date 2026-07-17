@@ -142,6 +142,42 @@ npm run lint     # ESLint 검사
 npm run format   # Prettier 포맷팅
 ```
 
+## 요청/응답 형식
+
+### 공통 응답 구조
+```json
+// 성공
+{ "success": true, "data": { ... } }
+
+// 실패
+{ "success": false, "error": { "code": "ERROR_CODE", "message": "설명" } }
+```
+
+### 인증
+```http
+POST /api/auth/signup
+{ "email": "user@example.com", "password": "12345678", "name": "홍길동" }
+→ { "success": true, "data": { "token": "eyJ..." } }
+
+POST /api/auth/signin
+{ "email": "user@example.com", "password": "12345678" }
+→ { "success": true, "data": { "token": "eyJ..." } }
+```
+
+인증이 필요한 API는 요청 헤더에 토큰을 포함합니다.
+```http
+Authorization: Bearer eyJ...
+```
+
+### 시뮬레이션 예시 (IRP)
+```http
+POST /api/simulations/irp
+{ "annualContribution": 9000000, "expectedReturnRate": 5, "investmentYears": 20, "annualIncome": 50000000 }
+→ { "success": true, "data": { "id": 1, "outputData": { "expectedBalance": ..., "annualTaxCredit": ..., "totalTaxCredit": ..., "notice": "..." } } }
+```
+
+전체 에러 코드 및 테스트 결과는 [`docs/api-test-results.md`](docs/api-test-results.md)를 참고하세요.
+
 ## 아키텍처
 
 클린 아키텍처 기반으로 계층을 분리합니다.
