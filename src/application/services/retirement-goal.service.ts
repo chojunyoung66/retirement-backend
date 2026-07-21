@@ -3,6 +3,7 @@ import { BusinessException } from "../../shared/exceptions/business.exception.js
 
 export interface RetirementGoalResult extends RetirementGoalData {
   id: number;
+  userId: number;
 }
 
 export const createRetirementGoalService = (retirementGoalRepo: IRetirementGoalRepo) => ({

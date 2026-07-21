@@ -7,8 +7,8 @@ export interface RetirementGoalData {
 }
 
 export interface IRetirementGoalRepo {
-  findByUserId(userId: number): Promise<(RetirementGoalData & { id: number }) | null>;
-  create(userId: number, data: RetirementGoalData): Promise<RetirementGoalData & { id: number }>;
-  update(userId: number, data: Partial<RetirementGoalData>): Promise<RetirementGoalData & { id: number }>;
+  findByUserId(userId: number): Promise<(RetirementGoalData & { id: number; userId: number }) | null>;
+  create(userId: number, data: RetirementGoalData): Promise<RetirementGoalData & { id: number; userId: number }>;
+  update(userId: number, data: Partial<RetirementGoalData>): Promise<RetirementGoalData & { id: number; userId: number }>;
   deleteByUserId(userId: number): Promise<void>;
 }

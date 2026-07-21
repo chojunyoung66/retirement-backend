@@ -11,6 +11,7 @@ export const createRetirementGoalRepo = (): IRetirementGoalRepo => ({
     return goal
       ? {
           id: goal.id,
+          userId: goal.userId,
           birthYear: goal.birthYear,
           retirementYear: goal.retirementYear,
           monthlyLivingExpense: goal.monthlyLivingExpense,
@@ -31,6 +32,7 @@ export const createRetirementGoalRepo = (): IRetirementGoalRepo => ({
 
     return {
       id: goal.id,
+      userId: goal.userId,
       birthYear: goal.birthYear,
       retirementYear: goal.retirementYear,
       monthlyLivingExpense: goal.monthlyLivingExpense,
@@ -48,6 +50,7 @@ export const createRetirementGoalRepo = (): IRetirementGoalRepo => ({
 
     return {
       id: goal.id,
+      userId: goal.userId,
       birthYear: goal.birthYear,
       retirementYear: goal.retirementYear,
       monthlyLivingExpense: goal.monthlyLivingExpense,
