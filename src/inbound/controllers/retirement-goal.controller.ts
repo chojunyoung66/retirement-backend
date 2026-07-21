@@ -44,6 +44,8 @@ export const createRetirementGoalController = (retirementGoalService: Retirement
 
       const goal = await retirementGoalService.getByUserId(userId);
 
+      // 사용자별 개인 데이터이므로 캐시 무효화
+      res.set("Cache-Control", "no-cache");
       res.status(200).json({
         success: true,
         data: goal,
