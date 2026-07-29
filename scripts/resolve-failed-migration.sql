@@ -1,3 +1,2 @@
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-GRANT ALL ON SCHEMA public TO PUBLIC;
+DELETE FROM "_prisma_migrations"
+WHERE "migration_name" = '20260729075647_split_pension_fields';
