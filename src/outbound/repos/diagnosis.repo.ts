@@ -18,7 +18,9 @@ export const createDiagnosisRepo = (): IDiagnosisRepo => ({
           householdType: diagnosis.householdType,
           birthYear: diagnosis.birthYear,
           retirementYear: diagnosis.retirementYear,
-          monthlyIncome: diagnosis.monthlyIncome,
+          nationalPension: diagnosis.nationalPension,
+          retirementPension: diagnosis.retirementPension,
+          personalPension: diagnosis.personalPension,
           monthlyExpense: diagnosis.monthlyExpense,
           updatedAt: diagnosis.updatedAt,
         }
@@ -39,7 +41,9 @@ export const createDiagnosisRepo = (): IDiagnosisRepo => ({
       householdType: diagnosis.householdType,
       birthYear: diagnosis.birthYear,
       retirementYear: diagnosis.retirementYear,
-      monthlyIncome: diagnosis.monthlyIncome,
+      nationalPension: diagnosis.nationalPension,
+      retirementPension: diagnosis.retirementPension,
+      personalPension: diagnosis.personalPension,
       monthlyExpense: diagnosis.monthlyExpense,
       updatedAt: diagnosis.updatedAt,
     };

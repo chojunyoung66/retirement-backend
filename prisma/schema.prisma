@@ -34,14 +34,16 @@ model User {
 }
 
 model Diagnosis {
-  id             Int      @id @default(autoincrement())
-  userId         Int      @unique
-  householdType  String
-  birthYear      Int
-  retirementYear Int
-  monthlyIncome  Int
-  monthlyExpense Int
-  updatedAt      DateTime @updatedAt
+  id                Int      @id @default(autoincrement())
+  userId            Int      @unique
+  householdType     String
+  birthYear         Int
+  retirementYear    Int
+  nationalPension   Int
+  retirementPension Int
+  personalPension   Int
+  monthlyExpense    Int
+  updatedAt         DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

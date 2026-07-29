@@ -2,7 +2,9 @@ export interface DiagnosisData {
   householdType: string;
   birthYear: number;
   retirementYear: number;
-  monthlyIncome: number;
+  nationalPension: number;
+  retirementPension: number;
+  personalPension: number;
   monthlyExpense: number;
 }
 

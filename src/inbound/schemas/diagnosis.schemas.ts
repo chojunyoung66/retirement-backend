@@ -10,7 +10,9 @@ export const diagnosisDataSchema = z.object({
     .number()
     .int("은퇴 예정 연도는 정수여야 합니다")
     .min(1900, "은퇴 예정 연도는 1900 이상이어야 합니다"),
-  monthlyIncome: z.number().nonnegative("월 소득은 0 이상이어야 합니다"),
+  nationalPension: z.number().nonnegative("국민연금은 0 이상이어야 합니다"),
+  retirementPension: z.number().nonnegative("퇴직연금은 0 이상이어야 합니다"),
+  personalPension: z.number().nonnegative("개인연금은 0 이상이어야 합니다"),
   monthlyExpense: z.number().nonnegative("월 지출은 0 이상이어야 합니다"),
 });
 
