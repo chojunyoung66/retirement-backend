@@ -1,6 +1,7 @@
 import type { IUserRepo } from "../contracts/user-repo.contract.js";
 import type { IHashUtil } from "../../shared/contracts/hash-util.contract.js";
 import type { IJwtUtil } from "../../shared/contracts/jwt-util.contract.js";
+import type { IGoogleTokenVerifier } from "../../shared/contracts/google-token-verifier.contract.js";
 import { BusinessException } from "../../shared/exceptions/business.exception.js";
 
 export interface AuthResult {
@@ -13,17 +14,22 @@ export interface AuthResult {
 export const createAuthService = (
   userRepo: IUserRepo,
   hashUtil: IHashUtil,
-  jwtUtil: IJwtUtil
+  jwtUtil: IJwtUtil,
+  googleTokenVerifier: IGoogleTokenVerifier,
 ) => ({
   async signup(
     email: string,
     password: string,
-    name: string
+    name: string,
   ): Promise<AuthResult> {
     // 기존 사용자 중복 확인
     const existingUser = await userRepo.findByEmail(email);
     if (existingUser) {
-      throw new BusinessException("DUPLICATE_EMAIL", "이미 존재하는 이메일입니다", 409);
+      throw new BusinessException(
+        "DUPLICATE_EMAIL",
+        "이미 존재하는 이메일입니다",
+        409,
+      );
     }
 
     // 비밀번호 해싱
@@ -52,7 +58,11 @@ export const createAuthService = (
     const isPasswordValid = await hashUtil.compare(password, hashedPassword);
 
     if (!user || !isPasswordValid) {
-      throw new BusinessException("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다", 401);
+      throw new BusinessException(
+        "INVALID_CREDENTIALS",
+        "이메일 또는 비밀번호가 올바르지 않습니다",
+        401,
+      );
     }
 
     // JWT 토큰 발급
@@ -64,6 +74,88 @@ export const createAuthService = (
       name: user.name,
       token,
     };
+  },
+
+  async googleSignIn(idToken: string): Promise<AuthResult> {
+    // Google ID Token 검증 (서명·aud·iss·exp)
+    const identity = await googleTokenVerifier.verifyIdToken(idToken);
+
+    // googleSub로 기존 사용자 조회
+    const byGoogle = await userRepo.findByGoogleSub(identity.googleSub);
+    if (byGoogle) {
+      const token = jwtUtil.sign({
+        userId: byGoogle.id,
+        email: byGoogle.email,
+      });
+      return {
+        id: byGoogle.id,
+        email: byGoogle.email,
+        name: byGoogle.name,
+        token,
+      };
+    }
+
+    // 검증된 동일 이메일이면 계정 연결
+    const byEmail = await userRepo.findByEmail(identity.email);
+    if (byEmail && identity.emailVerified) {
+      await userRepo.update(byEmail.id, {
+        googleSub: identity.googleSub,
+        profileImage: identity.profileImage,
+      });
+      const token = jwtUtil.sign({
+        userId: byEmail.id,
+        email: byEmail.email,
+      });
+      return {
+        id: byEmail.id,
+        email: byEmail.email,
+        name: byEmail.name,
+        token,
+      };
+    }
+
+    // 미검증 이메일인데 이미 계정이 있으면 연결·신규 생성 모두 불가
+    if (byEmail && !identity.emailVerified) {
+      throw new BusinessException(
+        "ACCESS_DENIED",
+        "이메일 미검증 계정은 연결할 수 없습니다",
+        403,
+      );
+    }
+
+    // 신규 Google 사용자 생성 (name 없으면 이메일 로컬파트)
+    const name =
+      identity.name?.trim() || identity.email.split("@")[0] || "user";
+    const created = await userRepo.createGoogleUser({
+      email: identity.email,
+      googleSub: identity.googleSub,
+      name,
+      profileImage: identity.profileImage,
+    });
+
+    const token = jwtUtil.sign({
+      userId: created.id,
+      email: created.email,
+    });
+    return {
+      id: created.id,
+      email: created.email,
+      name: created.name,
+      token,
+    };
+  },
+
+  async getMe(userId: number) {
+    // 인증된 사용자 프로필 조회
+    const user = await userRepo.findById(userId);
+    if (!user) {
+      throw new BusinessException(
+        "USER_NOT_FOUND",
+        "사용자를 찾을 수 없습니다",
+        404,
+      );
+    }
+    return user;
   },
 });
 

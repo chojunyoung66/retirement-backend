@@ -1,6 +1,8 @@
 import type { IUserRepo } from "../contracts/user-repo.contract.js";
 import type { IHashUtil } from "../../shared/contracts/hash-util.contract.js";
 import type { IJwtUtil } from "../../shared/contracts/jwt-util.contract.js";
+import type { IGoogleTokenVerifier } from "../../shared/contracts/google-token-verifier.contract.js";
+import { BusinessException } from "../../shared/exceptions/business.exception.js";
 import { createAuthService } from "./auth.service.js";
 
 describe("AuthService", () => {
@@ -8,12 +10,16 @@ describe("AuthService", () => {
   let mockUserRepo: Partial<IUserRepo>;
   let mockHashUtil: Partial<IHashUtil>;
   let mockJwtUtil: Partial<IJwtUtil>;
+  let mockGoogleVerifier: Partial<IGoogleTokenVerifier>;
 
   beforeEach(() => {
     // 의존성 Mock 설정
     mockUserRepo = {
       findByEmail: jest.fn().mockResolvedValue(null),
+      findByGoogleSub: jest.fn().mockResolvedValue(null),
       create: jest.fn(),
+      createGoogleUser: jest.fn(),
+      update: jest.fn(),
     };
 
     mockHashUtil = {
@@ -25,10 +31,15 @@ describe("AuthService", () => {
       sign: jest.fn().mockReturnValue("jwt_token_abc"),
     };
 
+    mockGoogleVerifier = {
+      verifyIdToken: jest.fn(),
+    };
+
     authService = createAuthService(
       mockUserRepo as IUserRepo,
       mockHashUtil as IHashUtil,
-      mockJwtUtil as IJwtUtil
+      mockJwtUtil as IJwtUtil,
+      mockGoogleVerifier as IGoogleTokenVerifier,
     );
   });
 
@@ -55,7 +66,7 @@ describe("AuthService", () => {
       expect(mockUserRepo.create).toHaveBeenCalledWith(
         email,
         "hashed_password_123",
-        name
+        name,
       );
       expect(mockJwtUtil.sign).toHaveBeenCalledWith({ userId, email });
       expect(result).toEqual({
@@ -77,10 +88,14 @@ describe("AuthService", () => {
         email,
         password: "hashed_existing",
         name: "기존유저",
+        googleSub: null,
+        profileImage: null,
       });
 
       // when & then
-      await expect(authService.signup(email, password, name)).rejects.toMatchObject({
+      await expect(
+        authService.signup(email, password, name),
+      ).rejects.toMatchObject({
         code: "DUPLICATE_EMAIL",
         statusCode: 409,
       });
@@ -103,6 +118,8 @@ describe("AuthService", () => {
         email,
         password: hashedPassword,
         name: "테스트유저",
+        googleSub: null,
+        profileImage: null,
       });
 
       (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(true);
@@ -114,7 +131,7 @@ describe("AuthService", () => {
       expect(mockUserRepo.findByEmail).toHaveBeenCalledWith(email);
       expect(mockHashUtil.compare).toHaveBeenCalledWith(
         password,
-        hashedPassword
+        hashedPassword,
       );
       expect(mockJwtUtil.sign).toHaveBeenCalledWith({ userId, email });
       expect(result).toEqual({
@@ -154,6 +171,8 @@ describe("AuthService", () => {
         email,
         password: hashedPassword,
         name: "테스트유저",
+        googleSub: null,
+        profileImage: null,
       });
 
       (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(false);
@@ -166,6 +185,167 @@ describe("AuthService", () => {
 
       // JWT 토큰이 발급되지 않아야 함
       expect(mockJwtUtil.sign).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("googleSignIn", () => {
+    const idToken = "google_id_token";
+    const identity = {
+      googleSub: "google-sub-123",
+      email: "user@gmail.com",
+      emailVerified: true,
+      name: "구글유저",
+      profileImage: "https://example.com/photo.jpg",
+    };
+
+    it("해피패스: googleSub로 기존 사용자를 찾아 JWT 발급", async () => {
+      // given
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce(
+        identity,
+      );
+      (mockUserRepo.findByGoogleSub as jest.Mock).mockResolvedValueOnce({
+        id: 10,
+        email: identity.email,
+        password: null,
+        name: identity.name,
+        googleSub: identity.googleSub,
+        profileImage: identity.profileImage,
+      });
+
+      // when
+      const result = await authService.googleSignIn(idToken);
+
+      // then
+      expect(mockGoogleVerifier.verifyIdToken).toHaveBeenCalledWith(idToken);
+      expect(mockUserRepo.findByGoogleSub).toHaveBeenCalledWith(
+        identity.googleSub,
+      );
+      expect(mockUserRepo.createGoogleUser).not.toHaveBeenCalled();
+      expect(mockJwtUtil.sign).toHaveBeenCalledWith({
+        userId: 10,
+        email: identity.email,
+      });
+      expect(result).toEqual({
+        id: 10,
+        email: identity.email,
+        name: identity.name,
+        token: "jwt_token_abc",
+      });
+    });
+
+    it("해피패스: 신규 Google 사용자를 생성하고 JWT 발급", async () => {
+      // given
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce(
+        identity,
+      );
+      (mockUserRepo.findByGoogleSub as jest.Mock).mockResolvedValueOnce(null);
+      (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce(null);
+      (mockUserRepo.createGoogleUser as jest.Mock).mockResolvedValueOnce({
+        id: 20,
+        email: identity.email,
+        password: null,
+        name: identity.name,
+        googleSub: identity.googleSub,
+        profileImage: identity.profileImage,
+      });
+
+      // when
+      const result = await authService.googleSignIn(idToken);
+
+      // then
+      expect(mockUserRepo.createGoogleUser).toHaveBeenCalledWith({
+        email: identity.email,
+        googleSub: identity.googleSub,
+        name: identity.name,
+        profileImage: identity.profileImage,
+      });
+      expect(result).toEqual({
+        id: 20,
+        email: identity.email,
+        name: identity.name,
+        token: "jwt_token_abc",
+      });
+    });
+
+    it("해피패스: 검증된 동일 이메일이면 기존 계정에 googleSub 연결", async () => {
+      // given
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce(
+        identity,
+      );
+      (mockUserRepo.findByGoogleSub as jest.Mock).mockResolvedValueOnce(null);
+      (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        email: identity.email,
+        password: "hashed",
+        name: "기존유저",
+        googleSub: null,
+        profileImage: null,
+      });
+      (mockUserRepo.update as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        email: identity.email,
+        name: "기존유저",
+      });
+
+      // when
+      const result = await authService.googleSignIn(idToken);
+
+      // then
+      expect(mockUserRepo.update).toHaveBeenCalledWith(5, {
+        googleSub: identity.googleSub,
+        profileImage: identity.profileImage,
+      });
+      expect(mockUserRepo.createGoogleUser).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        id: 5,
+        email: identity.email,
+        name: "기존유저",
+        token: "jwt_token_abc",
+      });
+    });
+
+    it("유효하지 않은 Google 토큰이면 INVALID_GOOGLE_TOKEN 예외 발생", async () => {
+      // given
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockRejectedValueOnce(
+        new BusinessException(
+          "INVALID_GOOGLE_TOKEN",
+          "유효하지 않은 Google 토큰입니다",
+          401,
+        ),
+      );
+
+      // when & then
+      await expect(authService.googleSignIn(idToken)).rejects.toMatchObject({
+        code: "INVALID_GOOGLE_TOKEN",
+        statusCode: 401,
+      });
+      expect(mockUserRepo.findByGoogleSub).not.toHaveBeenCalled();
+      expect(mockUserRepo.createGoogleUser).not.toHaveBeenCalled();
+    });
+
+    it("미검증 이메일에 기존 계정이 있으면 ACCESS_DENIED 예외 발생", async () => {
+      // given
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce({
+        ...identity,
+        emailVerified: false,
+      });
+      (mockUserRepo.findByGoogleSub as jest.Mock).mockResolvedValueOnce(null);
+      (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        email: identity.email,
+        password: "hashed",
+        name: "기존유저",
+        googleSub: null,
+        profileImage: null,
+      });
+
+      // when & then
+      await expect(authService.googleSignIn(idToken)).rejects.toMatchObject({
+        code: "ACCESS_DENIED",
+        statusCode: 403,
+      });
+      expect(mockUserRepo.update).not.toHaveBeenCalled();
+      expect(mockUserRepo.createGoogleUser).not.toHaveBeenCalled();
     });
   });
 });

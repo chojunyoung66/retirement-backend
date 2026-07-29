@@ -31,6 +31,7 @@ import { errorMiddleware } from "./inbound/middlewares/error.middleware.js";
 // Utils
 import { createJwtUtil } from "./shared/utils/jwt.util.js";
 import { createBcryptUtil } from "./shared/utils/bcrypt.util.js";
+import { createGoogleTokenVerifier } from "./shared/utils/google-token-verifier.js";
 
 // Router
 import { healthRouter } from "./inbound/routers/health.router.js";
@@ -45,8 +46,13 @@ export const createApp = () => {
   // Utils 생성
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) throw new Error("JWT_SECRET 환경변수가 설정되지 않았습니다.");
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  if (!googleClientId) {
+    throw new Error("GOOGLE_CLIENT_ID 환경변수가 설정되지 않았습니다.");
+  }
   const jwtUtil = createJwtUtil(jwtSecret);
   const hashUtil = createBcryptUtil();
+  const googleTokenVerifier = createGoogleTokenVerifier(googleClientId);
 
   // Repos 생성
   const userRepo = createUserRepo();
@@ -56,23 +62,28 @@ export const createApp = () => {
   const diagnosisRepo = createDiagnosisRepo();
 
   // Services 생성
-  const authService = createAuthService(userRepo, hashUtil, jwtUtil);
+  const authService = createAuthService(
+    userRepo,
+    hashUtil,
+    jwtUtil,
+    googleTokenVerifier,
+  );
   const userService = createUserService(userRepo);
   const retirementGoalService = createRetirementGoalService(retirementGoalRepo);
   const simulationService = createSimulationService(simulationRepo);
   const portfolioService = createPortfolioService(portfolioRepo);
   const diagnosisService = createDiagnosisService(diagnosisRepo);
 
+  // Auth middleware 생성
+  const authMiddleware = createAuthMiddleware(jwtUtil);
+
   // Controllers 생성
-  const authController = createAuthController(authService);
+  const authController = createAuthController(authService, authMiddleware);
   const userController = createUserController(userService);
   const retirementGoalController = createRetirementGoalController(retirementGoalService);
   const simulationController = createSimulationController(simulationService);
   const portfolioController = createPortfolioController(portfolioService);
   const diagnosisController = createDiagnosisController(diagnosisService);
-
-  // Auth middleware 생성
-  const authMiddleware = createAuthMiddleware(jwtUtil);
 
   // Public routes (인증 불필요)
   app.use("/health", healthRouter);

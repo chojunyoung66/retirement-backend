@@ -16,9 +16,30 @@ describe("AuthController", () => {
     mockAuthService = {
       signup: jest.fn(),
       signin: jest.fn(),
+      googleSignIn: jest.fn(),
+      getMe: jest.fn(),
     };
 
-    const authController = createAuthController(mockAuthService as AuthServiceType);
+    const authMiddleware = (
+      req: express.Request,
+      res: express.Response,
+      next: express.NextFunction,
+    ) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith("Bearer ")) {
+        return res.status(401).json({
+          success: false,
+          error: { code: "UNAUTHORIZED", message: "유효한 토큰이 없습니다" },
+        });
+      }
+      req.userId = 1;
+      next();
+    };
+
+    const authController = createAuthController(
+      mockAuthService as AuthServiceType,
+      authMiddleware,
+    );
     app.use("/auth", authController.router);
     app.use(errorMiddleware);
   });
@@ -282,6 +303,90 @@ describe("AuthController", () => {
       expect(response.status).toBe(401);
       expect(response.body.success).toBe(false);
       expect(response.body.error.code).toBe("INVALID_CREDENTIALS");
+    });
+  });
+
+  describe("POST /auth/google", () => {
+    it("유효한 idToken으로 Google 로그인 성공", async () => {
+      const mockResult = {
+        id: 1,
+        email: "user@gmail.com",
+        name: "구글유저",
+        token: "jwt_token_abc",
+      };
+      (mockAuthService.googleSignIn as jest.Mock).mockResolvedValueOnce(
+        mockResult,
+      );
+
+      const response = await request(app)
+        .post("/auth/google")
+        .send({ idToken: "google_id_token" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toEqual(mockResult);
+      expect(mockAuthService.googleSignIn).toHaveBeenCalledWith(
+        "google_id_token",
+      );
+    });
+
+    it("idToken 없으면 INVALID_REQUEST", async () => {
+      const response = await request(app).post("/auth/google").send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
+    });
+
+    it("잘못된 Google 토큰은 INVALID_GOOGLE_TOKEN", async () => {
+      (mockAuthService.googleSignIn as jest.Mock).mockRejectedValueOnce(
+        new BusinessException(
+          "INVALID_GOOGLE_TOKEN",
+          "유효하지 않은 Google 토큰입니다",
+          401,
+        ),
+      );
+
+      const response = await request(app)
+        .post("/auth/google")
+        .send({ idToken: "bad" });
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe("INVALID_GOOGLE_TOKEN");
+    });
+  });
+
+  describe("GET /auth/me", () => {
+    it("인증된 사용자 프로필 조회", async () => {
+      (mockAuthService.getMe as jest.Mock).mockResolvedValueOnce({
+        id: 1,
+        email: "test@example.com",
+        name: "테스트유저",
+        profileImage: null,
+      });
+
+      const response = await request(app)
+        .get("/auth/me")
+        .set("Authorization", "Bearer valid");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data.email).toBe("test@example.com");
+    });
+
+    it("인증 없으면 401", async () => {
+      const response = await request(app).get("/auth/me");
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe("POST /auth/logout", () => {
+    it("로그아웃 성공", async () => {
+      const response = await request(app)
+        .post("/auth/logout")
+        .set("Authorization", "Bearer valid");
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
     });
   });
 });
