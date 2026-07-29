@@ -2,6 +2,7 @@ services:
   - type: web
     name: retirement-backend
     runtime: node
+    # Shell 없이 복구: 실패 레코드 삭제 → (이미 적용됐으면 --applied) → migrate deploy
     buildCommand: npm install && npm run build && node scripts/resolve-failed-migration.js && npx prisma migrate deploy
     startCommand: npm start
     envVars:
