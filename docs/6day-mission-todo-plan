@@ -106,20 +106,36 @@ Google Client ID는 **발급 완료** 상태이므로 콘솔 작업은 도메인
 
 * **산출물:** 보강된 본 계획서, `prisma/schema.prisma` + 신규 마이그레이션, `.env`/`.env.example`, 통과하는 테스트
 
-### Day 2 - 핵심 API 구현 (1)
+### Day 2 - 핵심 API 검증 (기존 구현 완료)
 
-* **공유 계층:** `shared/`에 예외 클래스, JWT 유틸 구현 (TDD)
-* **은퇴 목표 설정 API:** service/contract/repo/controller 4계층 구현 (TDD)
-* **건강보험료 시뮬레이션 API:** `domain/health-insurance.ts` 계산 로직 + service/controller (TDD)
-* **산출물:** shared/, application/, inbound/, outbound/ 구조 완성 및 테스트 통과
+Day 1 시점 점검 결과, Day 2 범위는 **이미 구현·테스트·라우트 마운트까지 완료**된 상태다. 신규 구현 대신 **검증·계획서 정합**만 수행한다.
 
-### Day 3 - 핵심 API 구현 (2) 및 진단 결과 저장
+| 항목 | 상태 | 위치 |
+|------|------|------|
+| 예외 클래스 | 완료 | `shared/exceptions/business.exception.ts`, `technical.exception.ts` |
+| JWT 유틸 | 완료 | `shared/utils/jwt.util.ts` + contract (전용 unit test 없음, auth 경로에서 검증) |
+| 은퇴 목표 API | 완료 | 4계층 + `retirement-goal.service/controller.test.ts`, `/api/retirement-goals` |
+| 건강보험료 API | 완료 | `simulation` 모듈에 통합 (`POST/GET .../health-insurance`), 전용 `domain/health-insurance.ts`는 없음 |
 
-* **ISA 절세 분석 API:** `domain/isa-simulation.ts` + service/controller (TDD)
-* **연금 포트폴리오 관리 API:** service/repo/controller (TDD)
-* **진단 결과 저장 API(심화):** `diagnosis.service.ts`, `diagnosis-repo.contract.ts`, `diagnosis.repo.ts`, `diagnosis.controller.ts` 구현(4계층 패턴 유지). `userId`는 요청 본문이 아닌 인증 토큰에서만 추출
-* **엔드포인트:** `GET/PUT/DELETE /diagnoses/me/latest` (결과 없으면 `200 { diagnosis: null }` 반환)
-* **산출물:** 모든 시뮬레이션·진단 저장 서비스 완성 및 테스트 통과
+| 시간 | 작업 |
+|------|------|
+| 착수 | 위 표 기준 파일·라우트 존재 확인 |
+| 검증 | `npm run type` · `npm run test` (특히 retirement-goal / simulation) |
+| 마무리 | 본 절 보강 커밋, Day 3(Diagnosis)로 이관 |
+
+* **선택(시간 여유 시):** JWT util 전용 테스트, 건강보험 계산을 `domain/health-insurance.ts`로 추출 — 동작에는 불필요
+* **산출물:** 검증 통과 기록, 보강된 본 계획서
+
+### Day 3 - 진단 결과 저장 (심화) + 기존 시뮬레이션 확인
+
+ISA·연금 포트폴리오 API도 **이미 구현 완료**(`simulation` / `portfolio`). Day 3의 신규 구현은 **Diagnosis API만**이다.
+
+* **확인만:** ISA (`/api/simulations/...`), 연금 포트폴리오 (`/api/pension-portfolios`) 테스트 통과 유지
+* **진단 결과 저장 API(심화, 신규):** `diagnosis.service.ts`, `diagnosis-repo.contract.ts`, `diagnosis.repo.ts`, `diagnosis.controller.ts` (4계층). `userId`는 요청 본문이 아닌 인증 토큰에서만 추출
+* **엔드포인트:** `GET/PUT/DELETE /diagnoses/me/latest`
+* **응답 형식(A):** 기존 API와 동일 `{ success, data }` — 결과 없으면 `200 { success: true, data: null }`
+* **전제:** Day 1에서 추가한 `Diagnosis` 모델·마이그레이션 사용
+* **산출물:** Diagnosis 4계층 + 테스트 통과, bootstrap 라우트 마운트
 
 ### Day 4 - Google 인증 및 API 통합
 
