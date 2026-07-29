@@ -26,7 +26,6 @@ model User {
   updatedAt    DateTime @updatedAt
 
   diagnosis         Diagnosis?
-  retirementGoal    RetirementGoal?
   simulationResults SimulationResult[]
   healthSimulations HealthInsuranceSimulation[]
   isaSimulations    IsaSimulation[]
@@ -44,21 +43,6 @@ model Diagnosis {
   personalPension   Int
   monthlyExpense    Int
   updatedAt         DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model RetirementGoal {
-  id                   Int      @id @default(autoincrement())
-  userId               Int      @unique
-  birthYear            Int
-  retirementYear       Int
-  monthlyLivingExpense Int
-  nationalPension      Int
-  retirementAsset      Int
-  personalPension      Int  @default(0)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

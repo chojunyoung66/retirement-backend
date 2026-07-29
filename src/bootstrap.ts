@@ -3,7 +3,6 @@ import express from "express";
 
 // Repos
 import { createUserRepo } from "./outbound/repos/user.repo.js";
-import { createRetirementGoalRepo } from "./outbound/repos/retirement-goal.repo.js";
 import { createSimulationRepo } from "./outbound/repos/simulation.repo.js";
 import { createPortfolioRepo } from "./outbound/repos/portfolio.repo.js";
 import { createDiagnosisRepo } from "./outbound/repos/diagnosis.repo.js";
@@ -11,7 +10,6 @@ import { createDiagnosisRepo } from "./outbound/repos/diagnosis.repo.js";
 // Services
 import { createAuthService } from "./application/services/auth.service.js";
 import { createUserService } from "./application/services/user.service.js";
-import { createRetirementGoalService } from "./application/services/retirement-goal.service.js";
 import { createSimulationService } from "./application/services/simulation.service.js";
 import { createPortfolioService } from "./application/services/portfolio.service.js";
 import { createDiagnosisService } from "./application/services/diagnosis.service.js";
@@ -19,7 +17,6 @@ import { createDiagnosisService } from "./application/services/diagnosis.service
 // Controllers
 import { createAuthController } from "./inbound/controllers/auth.controller.js";
 import { createUserController } from "./inbound/controllers/user.controller.js";
-import { createRetirementGoalController } from "./inbound/controllers/retirement-goal.controller.js";
 import { createSimulationController } from "./inbound/controllers/simulation.controller.js";
 import { createPortfolioController } from "./inbound/controllers/portfolio.controller.js";
 import { createDiagnosisController } from "./inbound/controllers/diagnosis.controller.js";
@@ -56,7 +53,6 @@ export const createApp = () => {
 
   // Repos 생성
   const userRepo = createUserRepo();
-  const retirementGoalRepo = createRetirementGoalRepo();
   const simulationRepo = createSimulationRepo();
   const portfolioRepo = createPortfolioRepo();
   const diagnosisRepo = createDiagnosisRepo();
@@ -69,7 +65,6 @@ export const createApp = () => {
     googleTokenVerifier,
   );
   const userService = createUserService(userRepo);
-  const retirementGoalService = createRetirementGoalService(retirementGoalRepo);
   const simulationService = createSimulationService(simulationRepo);
   const portfolioService = createPortfolioService(portfolioRepo);
   const diagnosisService = createDiagnosisService(diagnosisRepo);
@@ -80,7 +75,6 @@ export const createApp = () => {
   // Controllers 생성
   const authController = createAuthController(authService, authMiddleware);
   const userController = createUserController(userService);
-  const retirementGoalController = createRetirementGoalController(retirementGoalService);
   const simulationController = createSimulationController(simulationService);
   const portfolioController = createPortfolioController(portfolioService);
   const diagnosisController = createDiagnosisController(diagnosisService);
@@ -91,7 +85,6 @@ export const createApp = () => {
 
   // Protected routes (인증 필요)
   app.use("/api/users", authMiddleware, userController.router);
-  app.use("/api/retirement-goals", authMiddleware, retirementGoalController.router);
   app.use("/api/simulations", authMiddleware, simulationController.router);
   app.use("/api/pension-portfolios", authMiddleware, portfolioController.router);
   app.use("/api/diagnoses", authMiddleware, diagnosisController.router);
