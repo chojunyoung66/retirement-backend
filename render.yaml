@@ -2,7 +2,7 @@ services:
   - type: web
     name: retirement-backend
     runtime: node
-    buildCommand: npm install && npm run build && npx prisma db execute --file scripts/resolve-failed-migration.sql && npx prisma migrate deploy
+    buildCommand: npm install && npm run build && node scripts/resolve-failed-migration.js && npx prisma migrate deploy
     startCommand: npm start
     envVars:
       - key: NODE_ENV
