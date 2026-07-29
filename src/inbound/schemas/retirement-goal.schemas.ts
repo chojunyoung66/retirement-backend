@@ -6,6 +6,7 @@ export const retirementGoalDataSchema = z.object({
   monthlyLivingExpense: z.number().positive("월 생활비는 양수여야 합니다"),
   nationalPension: z.number().nonnegative("국민연금은 0 이상이어야 합니다"),
   retirementAsset: z.number().nonnegative("정년 자산은 0 이상이어야 합니다"),
+  personalPension: z.number().nonnegative("개인연금은 0 이상이어야 합니다").default(0),
 });
 
 export type RetirementGoalData = z.infer<typeof retirementGoalDataSchema>;

@@ -4,6 +4,7 @@ export interface RetirementGoalData {
   monthlyLivingExpense: number;
   nationalPension: number;
   retirementAsset: number;
+  personalPension: number;
 }
 
 export interface IRetirementGoalRepo {

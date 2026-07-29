@@ -17,6 +17,7 @@ export const createRetirementGoalRepo = (): IRetirementGoalRepo => ({
           monthlyLivingExpense: goal.monthlyLivingExpense,
           nationalPension: goal.nationalPension,
           retirementAsset: goal.retirementAsset,
+          personalPension: goal.personalPension,
         }
       : null;
   },
@@ -38,6 +39,7 @@ export const createRetirementGoalRepo = (): IRetirementGoalRepo => ({
       monthlyLivingExpense: goal.monthlyLivingExpense,
       nationalPension: goal.nationalPension,
       retirementAsset: goal.retirementAsset,
+      personalPension: goal.personalPension,
     };
   },
 
@@ -56,6 +58,7 @@ export const createRetirementGoalRepo = (): IRetirementGoalRepo => ({
       monthlyLivingExpense: goal.monthlyLivingExpense,
       nationalPension: goal.nationalPension,
       retirementAsset: goal.retirementAsset,
+      personalPension: goal.personalPension,
     };
   },
 
