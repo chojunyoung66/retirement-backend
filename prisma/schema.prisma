@@ -16,13 +16,16 @@ enum SimulationType {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  password     String?
+  googleSub    String?  @unique
+  name         String
+  profileImage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
+  diagnosis         Diagnosis?
   retirementGoal    RetirementGoal?
   simulationResults SimulationResult[]
   healthSimulations HealthInsuranceSimulation[]
@@ -30,30 +33,43 @@ model User {
   portfolios        PensionPortfolio[]
 }
 
+model Diagnosis {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  householdType  String
+  birthYear      Int
+  retirementYear Int
+  monthlyIncome  Int
+  monthlyExpense Int
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model RetirementGoal {
-  id                    Int      @id @default(autoincrement())
-  userId                Int      @unique
-  birthYear             Int
-  retirementYear        Int
-  monthlyLivingExpense  Int
-  nationalPension       Int
-  retirementAsset       Int
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   Int      @id @default(autoincrement())
+  userId               Int      @unique
+  birthYear            Int
+  retirementYear       Int
+  monthlyLivingExpense Int
+  nationalPension      Int
+  retirementAsset      Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SimulationResult {
-  id          Int              @id @default(autoincrement())
-  userId      Int
-  type        SimulationType
-  version     Int              @default(1)
-  status      String           @default("draft")
-  inputData   Json
-  outputData  Json
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id         Int            @id @default(autoincrement())
+  userId     Int
+  type       SimulationType
+  version    Int            @default(1)
+  status     String         @default("draft")
+  inputData  Json
+  outputData Json
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -76,15 +92,15 @@ model HealthInsuranceSimulation {
 }
 
 model IsaSimulation {
-  id                  Int      @id @default(autoincrement())
-  userId              Int
-  annualContribution  Int
-  expectedReturnRate  Float
-  investmentYears     Int
-  expectedProfit      Float
-  estimatedTaxSaving  Float
-  notice              String?
-  createdAt           DateTime @default(now())
+  id                 Int      @id @default(autoincrement())
+  userId             Int
+  annualContribution Int
+  expectedReturnRate Float
+  investmentYears    Int
+  expectedProfit     Float
+  estimatedTaxSaving Float
+  notice             String?
+  createdAt          DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -102,7 +118,7 @@ model PensionPortfolio {
 }
 
 model PensionPortfolioItem {
-  id          Int     @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   portfolioId Int
   symbol      String
   name        String
