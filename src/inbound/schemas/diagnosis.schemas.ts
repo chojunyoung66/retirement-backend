@@ -14,6 +14,8 @@ export const diagnosisDataSchema = z.object({
   retirementPension: z.number().nonnegative("퇴직연금은 0 이상이어야 합니다"),
   personalPension: z.number().nonnegative("개인연금은 0 이상이어야 합니다"),
   monthlyExpense: z.number().nonnegative("월 지출은 0 이상이어야 합니다"),
+  healthInsurance: z.number().nonnegative("건강보험료는 0 이상이어야 합니다").default(0),
+  privateInsurance: z.number().nonnegative("민영보험료는 0 이상이어야 합니다").default(0),
 });
 
 export type DiagnosisDataInput = z.infer<typeof diagnosisDataSchema>;

@@ -6,6 +6,8 @@ export interface DiagnosisData {
   retirementPension: number;
   personalPension: number;
   monthlyExpense: number;
+  healthInsurance: number;
+  privateInsurance: number;
 }
 
 export interface DiagnosisRecord extends DiagnosisData {

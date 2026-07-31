@@ -22,6 +22,8 @@ export const createDiagnosisRepo = (): IDiagnosisRepo => ({
           retirementPension: diagnosis.retirementPension,
           personalPension: diagnosis.personalPension,
           monthlyExpense: diagnosis.monthlyExpense,
+          healthInsurance: diagnosis.healthInsurance,
+          privateInsurance: diagnosis.privateInsurance,
           updatedAt: diagnosis.updatedAt,
         }
       : null;
@@ -45,6 +47,8 @@ export const createDiagnosisRepo = (): IDiagnosisRepo => ({
       retirementPension: diagnosis.retirementPension,
       personalPension: diagnosis.personalPension,
       monthlyExpense: diagnosis.monthlyExpense,
+      healthInsurance: diagnosis.healthInsurance,
+      privateInsurance: diagnosis.privateInsurance,
       updatedAt: diagnosis.updatedAt,
     };
   },

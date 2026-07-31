@@ -12,8 +12,12 @@ describe("DiagnosisService", () => {
     householdType: "single",
     birthYear: 1980,
     retirementYear: 2045,
-    monthlyIncome: 4000000,
+    nationalPension: 900000,
+    retirementPension: 500000,
+    personalPension: 300000,
     monthlyExpense: 2500000,
+    healthInsurance: 150000,
+    privateInsurance: 200000,
   };
 
   beforeEach(() => {
