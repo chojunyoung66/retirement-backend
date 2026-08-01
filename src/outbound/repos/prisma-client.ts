@@ -21,11 +21,14 @@ export const getPrismaClient = (): PrismaClient => {
     throw new Error("DATABASE_URL environment variable is not set");
   }
 
+  // Render External DB는 SSL 필수 — Pool에 미설정 시 signin 등 DB 호출이 500으로 실패
+  const isLocal = dbUrl.includes("localhost") || dbUrl.includes("127.0.0.1");
   prismaInstance = new PrismaClient({
     adapter: new PrismaPg(
       new Pool({
         connectionString: dbUrl,
-      })
+        ssl: isLocal ? false : { rejectUnauthorized: false },
+      }),
     ),
     log:
       process.env.NODE_ENV === "development"

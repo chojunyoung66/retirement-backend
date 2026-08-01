@@ -1,2 +1,2 @@
--- AlterEnum
-ALTER TYPE "SimulationType" ADD VALUE 'HOUSING_PENSION';
+-- AlterEnum (idempotent: 재배포·부분 적용에도 안전)
+ALTER TYPE "SimulationType" ADD VALUE IF NOT EXISTS 'HOUSING_PENSION';

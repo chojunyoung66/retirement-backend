@@ -2,8 +2,9 @@ services:
   - type: web
     name: retirement-backend
     runtime: node
-    # Shell 없이 복구: 실패 레코드 삭제 → (이미 적용됐으면 --applied) → migrate deploy
-    buildCommand: npm install && npm run build && node scripts/resolve-failed-migration.js && npx prisma migrate deploy
+    # Free 플랜은 Pre-Deploy 비활성. Build는 내부 DB DNS 불가(ENOTFOUND).
+    # 마이그레이션은 Start에서 실행(런타임은 내부 DB 접근 가능).
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
