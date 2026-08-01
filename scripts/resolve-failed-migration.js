@@ -5,8 +5,8 @@ const MIGRATION_NAME = "20260729075647_split_pension_fields";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
-  console.error("[resolve] DATABASE_URL is not set");
-  process.exit(1);
+  console.error("[resolve] DATABASE_URL is not set — skip (migrate deploy will fail if needed)");
+  process.exit(0);
 }
 
 // Render Postgres는 SSL 필요
@@ -31,13 +31,28 @@ async function columnExists(columnName) {
 }
 
 try {
-  // 실패/부분성공 기록 제거
+  // 실패 레코드가 있을 때만 복구 — 매 배포마다 성공 레코드를 지우지 않음
+  const failed = await pool.query(
+    `SELECT migration_name, finished_at, rolled_back_at, logs
+     FROM "_prisma_migrations"
+     WHERE migration_name = $1
+       AND finished_at IS NULL`,
+    [MIGRATION_NAME],
+  );
+
+  if ((failed.rowCount ?? 0) === 0) {
+    console.log(`[resolve] no failed record for ${MIGRATION_NAME} — skip`);
+    process.exit(0);
+  }
+
+  console.log(`[resolve] found failed record for ${MIGRATION_NAME} — recovering`);
+
   const deleted = await pool.query(
-    `DELETE FROM "_prisma_migrations" WHERE migration_name = $1`,
+    `DELETE FROM "_prisma_migrations" WHERE migration_name = $1 AND finished_at IS NULL`,
     [MIGRATION_NAME],
   );
   console.log(
-    `[resolve] deleted ${deleted.rowCount ?? 0} migration record(s) for ${MIGRATION_NAME}`,
+    `[resolve] deleted ${deleted.rowCount ?? 0} failed migration record(s)`,
   );
 
   const hasNational = await columnExists("nationalPension");
