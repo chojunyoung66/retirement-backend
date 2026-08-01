@@ -1,4 +1,5 @@
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import express from "express";
 
 // Repos
@@ -36,8 +37,15 @@ import { healthRouter } from "./inbound/routers/health.router.js";
 export const createApp = () => {
   const app = express();
 
-  // Middleware setup
-  app.use(cors());
+  // Middleware setup — credentials CORS (Vercel↔Render 쿠키)
+  const frontendOrigin = process.env.FRONTEND_ORIGIN;
+  app.use(
+    cors({
+      origin: frontendOrigin || true,
+      credentials: true,
+    }),
+  );
+  app.use(cookieParser());
   app.use(express.json());
 
   // Utils 생성

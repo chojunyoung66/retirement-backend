@@ -380,10 +380,8 @@ describe("AuthController", () => {
   });
 
   describe("POST /auth/logout", () => {
-    it("로그아웃 성공", async () => {
-      const response = await request(app)
-        .post("/auth/logout")
-        .set("Authorization", "Bearer valid");
+    it("로그아웃 성공 (인증 헤더 없이 쿠키만 삭제)", async () => {
+      const response = await request(app).post("/auth/logout");
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
