@@ -6,6 +6,7 @@ import {
   signinDataSchema,
   googleSignInDataSchema,
 } from "../schemas/auth.schemas.js";
+import { clearAuthCookie, setAuthCookie } from "../utils/auth-cookie.js";
 
 type AuthMiddleware = (
   req: Request,
@@ -37,6 +38,8 @@ export const createAuthController = (
       const { email, password, name } = validation.data;
       const result = await authService.signup(email, password, name);
 
+      // JSON token 유지(구 클라이언트) + HttpOnly 쿠키 병행
+      setAuthCookie(res, result.token);
       res.status(201).json({ success: true, data: result });
     } catch (error) {
       next(error);
@@ -61,6 +64,7 @@ export const createAuthController = (
       const { email, password } = validation.data;
       const result = await authService.signin(email, password);
 
+      setAuthCookie(res, result.token);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);
@@ -84,13 +88,24 @@ export const createAuthController = (
 
       const result = await authService.googleSignIn(validation.data.idToken);
 
+      setAuthCookie(res, result.token);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
   });
 
-  // GET /api/auth/me · POST /api/auth/logout (인증 필요)
+  // POST /api/auth/logout — 인증 없이 쿠키 삭제 (만료 토큰으로도 로그아웃 가능)
+  router.post("/logout", async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      clearAuthCookie(res);
+      res.status(200).json({ success: true, data: null });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // GET /api/auth/me (인증 필요)
   if (authMiddleware) {
     router.get(
       "/me",
@@ -109,19 +124,6 @@ export const createAuthController = (
           const profile = await authService.getMe(userId);
           res.set("Cache-Control", "no-cache");
           res.status(200).json({ success: true, data: profile });
-        } catch (error) {
-          next(error);
-        }
-      },
-    );
-
-    router.post(
-      "/logout",
-      authMiddleware,
-      async (_req: Request, res: Response, next: NextFunction) => {
-        try {
-          // 스테이트리스 JWT — 서버는 성공만 알리고 클라이언트가 토큰 제거
-          res.status(200).json({ success: true, data: null });
         } catch (error) {
           next(error);
         }
