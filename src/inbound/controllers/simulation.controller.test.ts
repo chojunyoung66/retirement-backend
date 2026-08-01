@@ -29,6 +29,8 @@ describe("SimulationController", () => {
       getLatestSeverancePay: jest.fn(),
       createUnemploymentBenefit: jest.fn(),
       getLatestUnemploymentBenefit: jest.fn(),
+      createHousingPension: jest.fn(),
+      getLatestHousingPension: jest.fn(),
       getSimulationById: jest.fn(),
       deleteSimulation: jest.fn(),
       updateSimulation: jest.fn(),
@@ -546,6 +548,87 @@ describe("SimulationController", () => {
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual(mockResult);
       expect(mockSimulationService.getLatestUnemploymentBenefit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe("POST /simulations/housing-pension", () => {
+    const validBody = {
+      youngerSpouseAge: 60,
+      housePrice: 400_000_000,
+      productType: "GENERAL",
+      payoutMode: "LIFETIME",
+      payoutStyle: "FLAT",
+      isBasicPensionRecipient: false,
+      isSingleHomeUnder250m: true,
+    };
+
+    it("유효한 데이터로 주택연금 시뮬레이션 생성 성공", async () => {
+      const mockResult = {
+        id: 7,
+        userId: 1,
+        type: "HOUSING_PENSION",
+        version: 1,
+        status: "draft",
+        inputData: validBody,
+        outputData: { eligible: true, monthlyPayout: 842000 },
+      };
+
+      (mockSimulationService.createHousingPension as jest.Mock).mockResolvedValueOnce(
+        mockResult,
+      );
+
+      const response = await request(app)
+        .post("/simulations/housing-pension")
+        .set("Authorization", "Bearer valid_token")
+        .send(validBody);
+
+      expect(response.status).toBe(201);
+      expect(response.body.data).toEqual(mockResult);
+      expect(mockSimulationService.createHousingPension).toHaveBeenCalledWith(
+        1,
+        validBody,
+        expect.objectContaining({
+          eligible: expect.any(Boolean),
+          monthlyPayout: expect.any(Number),
+          tableVersion: expect.any(String),
+        }),
+      );
+    });
+
+    it("나이가 55 미만이면 검증 실패", async () => {
+      const response = await request(app)
+        .post("/simulations/housing-pension")
+        .set("Authorization", "Bearer valid_token")
+        .send({ ...validBody, youngerSpouseAge: 50 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
+    });
+  });
+
+  describe("GET /simulations/housing-pension/latest", () => {
+    it("최신 주택연금 시뮬레이션 조회 성공", async () => {
+      const mockResult = {
+        id: 7,
+        userId: 1,
+        type: "HOUSING_PENSION",
+        version: 1,
+        status: "draft",
+        inputData: {},
+        outputData: {},
+      };
+
+      (mockSimulationService.getLatestHousingPension as jest.Mock).mockResolvedValueOnce(
+        mockResult,
+      );
+
+      const response = await request(app)
+        .get("/simulations/housing-pension/latest")
+        .set("Authorization", "Bearer valid_token");
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual(mockResult);
+      expect(mockSimulationService.getLatestHousingPension).toHaveBeenCalledWith(1);
     });
   });
 

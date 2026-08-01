@@ -650,6 +650,73 @@ describe("SimulationService", () => {
     });
   });
 
+  describe("createHousingPension", () => {
+    it("해피패스: 주택연금 시뮬레이션을 저장", async () => {
+      // given
+      const userId = 1;
+      const inputData = {
+        youngerSpouseAge: 60,
+        housePrice: 400_000_000,
+        productType: "GENERAL",
+        payoutMode: "LIFETIME",
+        payoutStyle: "FLAT",
+        isBasicPensionRecipient: false,
+        isSingleHomeUnder250m: true,
+      };
+      const outputData = {
+        monthlyPayout: 842000,
+        annualPayout: 10_104_000,
+        eligible: true,
+        tableVersion: "HF-2026-03-01",
+        notice: "예시",
+        ineligibilityReasons: [],
+        initialGuaranteeFee: 4_000_000,
+        annualGuaranteeFeeRate: 0.0095,
+      };
+
+      (mockSimulationRepo.create as jest.Mock).mockResolvedValueOnce({
+        id: 7,
+        userId,
+        type: "HOUSING_PENSION",
+        version: 1,
+        status: "draft",
+        inputData,
+        outputData,
+      });
+
+      // when
+      const result = await simulationService.createHousingPension(
+        userId,
+        inputData,
+        outputData,
+      );
+
+      // then
+      expect(mockSimulationRepo.create).toHaveBeenCalledWith(
+        userId,
+        "HOUSING_PENSION",
+        inputData,
+        outputData,
+      );
+      expect(result.type).toBe("HOUSING_PENSION");
+    });
+  });
+
+  describe("getLatestHousingPension", () => {
+    it("최신 주택연금이 없으면 HOUSING_PENSION_SIMULATION_NOT_FOUND", async () => {
+      (mockSimulationRepo.findLatestByUserId as jest.Mock).mockResolvedValueOnce(
+        null,
+      );
+
+      await expect(
+        simulationService.getLatestHousingPension(1),
+      ).rejects.toMatchObject({
+        code: "HOUSING_PENSION_SIMULATION_NOT_FOUND",
+        statusCode: 404,
+      });
+    });
+  });
+
   describe("updateSimulation", () => {
     it("존재하지 않는 시뮬레이션 ID로 수정 시 SIMULATION_NOT_FOUND 예외 발생", async () => {
       // given

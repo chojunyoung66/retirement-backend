@@ -276,6 +276,41 @@ export const createSimulationService = (simulationRepo: ISimulationRepo) => ({
 
     return latest as SimulationResult;
   },
+
+  async createHousingPension(
+    userId: number,
+    inputData: Record<string, unknown>,
+    outputData: Record<string, unknown>,
+  ): Promise<SimulationResult> {
+    // 주택연금 시뮬레이션 저장(eligible:false 포함 허용)
+    const created = await simulationRepo.create(
+      userId,
+      "HOUSING_PENSION",
+      inputData,
+      outputData,
+    );
+
+    return created as SimulationResult;
+  },
+
+  async getLatestHousingPension(
+    userId: number,
+  ): Promise<SimulationResult> {
+    // 최신 주택연금 시뮬레이션 조회
+    const latest = await simulationRepo.findLatestByUserId(
+      userId,
+      "HOUSING_PENSION",
+    );
+    if (!latest) {
+      throw new BusinessException(
+        "HOUSING_PENSION_SIMULATION_NOT_FOUND",
+        "주택연금 시뮬레이션을 찾을 수 없습니다",
+        404,
+      );
+    }
+
+    return latest as SimulationResult;
+  },
 });
 
 export type SimulationServiceType = ReturnType<typeof createSimulationService>;
