@@ -5,7 +5,9 @@ export type SimulationType =
   | "ISA"
   | "NATIONAL_PENSION"
   | "IRP"
-  | "SEVERANCE_PAY";
+  | "SEVERANCE_PAY"
+  | "UNEMPLOYMENT_BENEFIT"
+  | "HOUSING_PENSION";
 
 export interface SimulationResultData {
   userId: number;
@@ -105,6 +107,8 @@ const validateSimulation = (
     "NATIONAL_PENSION",
     "IRP",
     "SEVERANCE_PAY",
+    "UNEMPLOYMENT_BENEFIT",
+    "HOUSING_PENSION",
   ];
   if (!validTypes.includes(type)) {
     throw new BusinessException(

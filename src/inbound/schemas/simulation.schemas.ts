@@ -97,6 +97,29 @@ export const unemploymentBenefitSimulationSchema = z.object({
 
 export type UnemploymentBenefitSimulationData = z.infer<typeof unemploymentBenefitSimulationSchema>;
 
+// 주택연금 시뮬레이션 입력 스키마 (프론트 housingPensionInputSchema와 동기)
+export const housingPensionSimulationSchema = z.object({
+  youngerSpouseAge: z
+    .number()
+    .int("나이는 정수여야 합니다")
+    .min(55, "연소자 만 나이는 55세 이상이어야 합니다")
+    .max(90, "연소자 만 나이는 90세 이하여야 합니다"),
+  housePrice: z.number().positive("주택 시세는 양수여야 합니다"),
+  productType: z.enum(["GENERAL", "PREFERENTIAL", "LOAN_REPAY"]),
+  payoutMode: z.enum(["LIFETIME", "LIFETIME_MIXED", "FIXED_TERM_MIXED"]),
+  payoutStyle: z.enum(["FLAT", "FRONT_LOADED", "STEP_UP"]),
+  isBasicPensionRecipient: z.boolean(),
+  isSingleHomeUnder250m: z.boolean(),
+  existingMortgageBalance: z.number().nonnegative().optional(),
+  frontLoadYears: z.union([z.literal(3), z.literal(5), z.literal(7), z.literal(10)]).optional(),
+  fixedTermYears: z.union([z.literal(10), z.literal(15), z.literal(20)]).optional(),
+  withdrawalRatio: z.number().min(0).max(0.5).optional(),
+});
+
+export type HousingPensionSimulationData = z.infer<
+  typeof housingPensionSimulationSchema
+>;
+
 export const simulationUpdateSchema = z.object({
   status: z.enum(["draft", "confirmed"], { error: "status는 draft 또는 confirmed여야 합니다" }),
 });

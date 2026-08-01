@@ -8,8 +8,10 @@ import {
   irpSimulationSchema,
   severancePaySimulationSchema,
   unemploymentBenefitSimulationSchema,
+  housingPensionSimulationSchema,
   simulationUpdateSchema,
 } from "../schemas/simulation.schemas.js";
+import { calculateHousingPension } from "../../application/services/housing-pension.service.js";
 
 export const createSimulationController = (
   simulationService: SimulationServiceType,
@@ -660,6 +662,61 @@ export const createSimulationController = (
 
         const latest =
           await simulationService.getLatestUnemploymentBenefit(userId);
+        res.status(200).json({ success: true, data: latest });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // POST /api/simulations/housing-pension
+  router.post(
+    "/housing-pension",
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const userId = req.userId;
+        if (!userId)
+          throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
+
+        // 요청 검증
+        const validation = housingPensionSimulationSchema.safeParse(req.body);
+        if (!validation.success) {
+          const message = validation.error.issues
+            .map((i) => i.message)
+            .join(", ");
+          throw new BusinessException(
+            "INVALID_REQUEST",
+            message || "요청 데이터가 유효하지 않습니다",
+            400,
+          );
+        }
+
+        // HF 표 기반 산식 (eligible:false도 저장)
+        const inputData = validation.data;
+        const outputData = calculateHousingPension(inputData);
+
+        const result = await simulationService.createHousingPension(
+          userId,
+          inputData as unknown as Record<string, unknown>,
+          outputData as unknown as Record<string, unknown>,
+        );
+        res.status(201).json({ success: true, data: result });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+
+  // GET /api/simulations/housing-pension/latest
+  router.get(
+    "/housing-pension/latest",
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const userId = req.userId;
+        if (!userId)
+          throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
+
+        const latest = await simulationService.getLatestHousingPension(userId);
         res.status(200).json({ success: true, data: latest });
       } catch (error) {
         next(error);

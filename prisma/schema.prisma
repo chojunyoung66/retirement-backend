@@ -13,6 +13,7 @@ enum SimulationType {
   IRP
   SEVERANCE_PAY
   UNEMPLOYMENT_BENEFIT
+  HOUSING_PENSION
 }
 
 model User {

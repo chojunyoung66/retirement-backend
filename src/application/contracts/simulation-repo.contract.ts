@@ -4,7 +4,8 @@ export type SimulationType =
   | "NATIONAL_PENSION"
   | "IRP"
   | "SEVERANCE_PAY"
-  | "UNEMPLOYMENT_BENEFIT";
+  | "UNEMPLOYMENT_BENEFIT"
+  | "HOUSING_PENSION";
 
 export interface SimulationResultData {
   userId: number;
