@@ -2,9 +2,10 @@ services:
   - type: web
     name: retirement-backend
     runtime: node
-    # NODE_ENV=production이면 npm이 devDependencies를 생략 → tsc/prisma 127
-    # --include=dev로 빌드·마이그레이션에 필요한 CLI를 설치한다
-    buildCommand: npm install --include=dev && npm run build && node scripts/resolve-failed-migration.js && npx prisma migrate deploy
+    # Build 단계에서는 내부 DB 호스트(dpg-…-a) DNS가 안 됨 → ENOTFOUND
+    # DB 접근(resolve/migrate)은 Pre-Deploy에서 실행
+    buildCommand: npm install --include=dev && npm run build
+    preDeployCommand: node scripts/resolve-failed-migration.js && npx prisma migrate deploy
     startCommand: npm start
     envVars:
       - key: NODE_ENV
