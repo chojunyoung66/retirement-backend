@@ -28,3 +28,10 @@ export const googleSignInDataSchema = z.object({
 });
 
 export type GoogleSignInData = z.infer<typeof googleSignInDataSchema>;
+
+export const googleLinkDataSchema = z.object({
+  idToken: z.string().min(1, "Google ID Token은 필수입니다"),
+  password: z.string().min(1, "비밀번호는 필수입니다"),
+});
+
+export type GoogleLinkData = z.infer<typeof googleLinkDataSchema>;

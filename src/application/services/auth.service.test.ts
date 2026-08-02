@@ -267,7 +267,7 @@ describe("AuthService", () => {
       });
     });
 
-    it("해피패스: 검증된 동일 이메일이면 기존 계정에 googleSub 연결", async () => {
+    it("동일 이메일의 기존 계정이 있으면 자동 연결하지 않고 ACCOUNT_LINK_REQUIRED", async () => {
       // given
       (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce(
         identity,
@@ -281,27 +281,14 @@ describe("AuthService", () => {
         googleSub: null,
         profileImage: null,
       });
-      (mockUserRepo.update as jest.Mock).mockResolvedValueOnce({
-        id: 5,
-        email: identity.email,
-        name: "기존유저",
-      });
 
-      // when
-      const result = await authService.googleSignIn(idToken);
-
-      // then
-      expect(mockUserRepo.update).toHaveBeenCalledWith(5, {
-        googleSub: identity.googleSub,
-        profileImage: identity.profileImage,
+      // when & then
+      await expect(authService.googleSignIn(idToken)).rejects.toMatchObject({
+        code: "ACCOUNT_LINK_REQUIRED",
+        statusCode: 409,
       });
+      expect(mockUserRepo.update).not.toHaveBeenCalled();
       expect(mockUserRepo.createGoogleUser).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        id: 5,
-        email: identity.email,
-        name: "기존유저",
-        token: "jwt_token_abc",
-      });
     });
 
     it("유효하지 않은 Google 토큰이면 INVALID_GOOGLE_TOKEN 예외 발생", async () => {
@@ -346,6 +333,118 @@ describe("AuthService", () => {
       });
       expect(mockUserRepo.update).not.toHaveBeenCalled();
       expect(mockUserRepo.createGoogleUser).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("linkGoogleAccount", () => {
+    const idToken = "google_id_token";
+    const password = "password12";
+    const identity = {
+      googleSub: "google-sub-123",
+      email: "user@gmail.com",
+      emailVerified: true,
+      name: "구글유저",
+      profileImage: "https://example.com/photo.jpg",
+    };
+
+    it("해피패스: 비밀번호 확인 후 googleSub를 연결하고 JWT 발급", async () => {
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce(
+        identity,
+      );
+      (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        email: identity.email,
+        password: "hashed",
+        name: "기존유저",
+        googleSub: null,
+        profileImage: null,
+      });
+      (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(true);
+      (mockUserRepo.findByGoogleSub as jest.Mock).mockResolvedValueOnce(null);
+      (mockUserRepo.update as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        email: identity.email,
+        name: "기존유저",
+      });
+
+      const result = await authService.linkGoogleAccount(idToken, password);
+
+      expect(mockHashUtil.compare).toHaveBeenCalledWith(password, "hashed");
+      expect(mockUserRepo.update).toHaveBeenCalledWith(5, {
+        googleSub: identity.googleSub,
+        profileImage: identity.profileImage,
+      });
+      expect(result).toEqual({
+        id: 5,
+        email: identity.email,
+        name: "기존유저",
+        token: "jwt_token_abc",
+      });
+    });
+
+    it("비밀번호가 틀리면 INVALID_CREDENTIALS", async () => {
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce(
+        identity,
+      );
+      (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        email: identity.email,
+        password: "hashed",
+        name: "기존유저",
+        googleSub: null,
+        profileImage: null,
+      });
+      (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      await expect(
+        authService.linkGoogleAccount(idToken, password),
+      ).rejects.toMatchObject({
+        code: "INVALID_CREDENTIALS",
+        statusCode: 401,
+      });
+      expect(mockUserRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("미검증 Google 이메일이면 ACCESS_DENIED", async () => {
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce({
+        ...identity,
+        emailVerified: false,
+      });
+
+      await expect(
+        authService.linkGoogleAccount(idToken, password),
+      ).rejects.toMatchObject({
+        code: "ACCESS_DENIED",
+        statusCode: 403,
+      });
+    });
+
+    it("googleSub가 다른 계정에 이미 있으면 GOOGLE_ACCOUNT_IN_USE", async () => {
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce(
+        identity,
+      );
+      (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        email: identity.email,
+        password: "hashed",
+        name: "기존유저",
+        googleSub: null,
+        profileImage: null,
+      });
+      (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(true);
+      (mockUserRepo.findByGoogleSub as jest.Mock).mockResolvedValueOnce({
+        id: 99,
+        email: "other@gmail.com",
+        name: "다른유저",
+      });
+
+      await expect(
+        authService.linkGoogleAccount(idToken, password),
+      ).rejects.toMatchObject({
+        code: "GOOGLE_ACCOUNT_IN_USE",
+        statusCode: 409,
+      });
+      expect(mockUserRepo.update).not.toHaveBeenCalled();
     });
   });
 });

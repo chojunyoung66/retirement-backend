@@ -17,6 +17,7 @@ describe("AuthController", () => {
       signup: jest.fn(),
       signin: jest.fn(),
       googleSignIn: jest.fn(),
+      linkGoogleAccount: jest.fn(),
       getMe: jest.fn(),
     };
 
@@ -402,6 +403,67 @@ describe("AuthController", () => {
 
       expect(response.status).toBe(401);
       expect(response.body.error.code).toBe("INVALID_GOOGLE_TOKEN");
+    });
+
+    it("기존 계정 연결이 필요하면 ACCOUNT_LINK_REQUIRED", async () => {
+      (mockAuthService.googleSignIn as jest.Mock).mockRejectedValueOnce(
+        new BusinessException(
+          "ACCOUNT_LINK_REQUIRED",
+          "이미 가입된 이메일입니다. 비밀번호 확인 후 Google 계정을 연결해 주세요",
+          409,
+        ),
+      );
+
+      const response = await request(app)
+        .post("/auth/google")
+        .send({ idToken: "google_id_token" });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe("ACCOUNT_LINK_REQUIRED");
+    });
+  });
+
+  describe("POST /auth/google/link", () => {
+    it("비밀번호 확인 후 Google 계정 연결 성공", async () => {
+      const mockResult = {
+        id: 5,
+        email: "user@gmail.com",
+        name: "기존유저",
+        token: "jwt_token_abc",
+      };
+      (mockAuthService.linkGoogleAccount as jest.Mock).mockResolvedValueOnce(
+        mockResult,
+      );
+
+      const response = await request(app)
+        .post("/auth/google/link")
+        .send({ idToken: "google_id_token", password: "password12" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual({
+        id: mockResult.id,
+        email: mockResult.email,
+        name: mockResult.name,
+      });
+      expect(response.body.data.token).toBeUndefined();
+      const setCookie = response.headers["set-cookie"];
+      const cookieText = Array.isArray(setCookie)
+        ? setCookie.join(" ")
+        : (setCookie ?? "");
+      expect(cookieText).toContain("retirement_token=");
+      expect(mockAuthService.linkGoogleAccount).toHaveBeenCalledWith(
+        "google_id_token",
+        "password12",
+      );
+    });
+
+    it("password 없으면 INVALID_REQUEST", async () => {
+      const response = await request(app)
+        .post("/auth/google/link")
+        .send({ idToken: "google_id_token" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
     });
   });
 

@@ -95,23 +95,14 @@ export const createAuthService = (
       };
     }
 
-    // 검증된 동일 이메일이면 계정 연결
+    // 동일 이메일의 기존 계정이 있으면 비밀번호 재인증 연결 필요
     const byEmail = await userRepo.findByEmail(identity.email);
     if (byEmail && identity.emailVerified) {
-      await userRepo.update(byEmail.id, {
-        googleSub: identity.googleSub,
-        profileImage: identity.profileImage,
-      });
-      const token = jwtUtil.sign({
-        userId: byEmail.id,
-        email: byEmail.email,
-      });
-      return {
-        id: byEmail.id,
-        email: byEmail.email,
-        name: byEmail.name,
-        token,
-      };
+      throw new BusinessException(
+        "ACCOUNT_LINK_REQUIRED",
+        "이미 가입된 이메일입니다. 비밀번호 확인 후 Google 계정을 연결해 주세요",
+        409,
+      );
     }
 
     // 미검증 이메일인데 이미 계정이 있으면 연결·신규 생성 모두 불가
@@ -141,6 +132,78 @@ export const createAuthService = (
       id: created.id,
       email: created.email,
       name: created.name,
+      token,
+    };
+  },
+
+  async linkGoogleAccount(
+    idToken: string,
+    password: string,
+  ): Promise<AuthResult> {
+    // Google ID Token 검증
+    const identity = await googleTokenVerifier.verifyIdToken(idToken);
+
+    // 검증된 이메일만 기존 계정에 연결 허용
+    if (!identity.emailVerified) {
+      throw new BusinessException(
+        "ACCESS_DENIED",
+        "이메일 미검증 계정은 연결할 수 없습니다",
+        403,
+      );
+    }
+
+    const user = await userRepo.findByEmail(identity.email);
+    const hashedPassword = user?.password || "";
+    const isPasswordValid = await hashUtil.compare(password, hashedPassword);
+
+    if (!user || !isPasswordValid) {
+      throw new BusinessException(
+        "INVALID_CREDENTIALS",
+        "이메일 또는 비밀번호가 올바르지 않습니다",
+        401,
+      );
+    }
+
+    // 이미 이 계정에 동일 googleSub가 있으면 바로 로그인
+    if (user.googleSub === identity.googleSub) {
+      const token = jwtUtil.sign({ userId: user.id, email: user.email });
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        token,
+      };
+    }
+
+    // 다른 계정에 이미 연결된 Google이면 충돌
+    if (user.googleSub && user.googleSub !== identity.googleSub) {
+      throw new BusinessException(
+        "GOOGLE_ACCOUNT_IN_USE",
+        "이미 다른 Google 계정이 연결되어 있습니다",
+        409,
+      );
+    }
+
+    const byGoogle = await userRepo.findByGoogleSub(identity.googleSub);
+    if (byGoogle && byGoogle.id !== user.id) {
+      throw new BusinessException(
+        "GOOGLE_ACCOUNT_IN_USE",
+        "이 Google 계정은 다른 사용자에게 이미 연결되어 있습니다",
+        409,
+      );
+    }
+
+    // 비밀번호 확인 후 googleSub 연결
+    await userRepo.update(user.id, {
+      googleSub: identity.googleSub,
+      profileImage: identity.profileImage,
+    });
+
+    const token = jwtUtil.sign({ userId: user.id, email: user.email });
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
       token,
     };
   },
