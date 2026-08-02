@@ -8,6 +8,7 @@ import {
   signupDataSchema,
   signinDataSchema,
   googleSignInDataSchema,
+  googleLinkDataSchema,
 } from "../schemas/auth.schemas.js";
 import { clearAuthCookie, setAuthCookie } from "../utils/auth-cookie.js";
 
@@ -98,6 +99,31 @@ export const createAuthController = (
       }
 
       const result = await authService.googleSignIn(validation.data.idToken);
+
+      setAuthCookie(res, result.token);
+      res.status(200).json({ success: true, data: toPublicAuthData(result) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  // POST /api/auth/google/link — 기존 계정에 Google 연결 (비밀번호 재인증)
+  router.post("/google/link", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const validation = googleLinkDataSchema.safeParse(req.body);
+      if (!validation.success) {
+        const message = validation.error.issues
+          .map((issue) => issue.message)
+          .join(", ");
+        throw new BusinessException(
+          "INVALID_REQUEST",
+          message || "요청 데이터가 유효하지 않습니다",
+          400,
+        );
+      }
+
+      const { idToken, password } = validation.data;
+      const result = await authService.linkGoogleAccount(idToken, password);
 
       setAuthCookie(res, result.token);
       res.status(200).json({ success: true, data: toPublicAuthData(result) });
