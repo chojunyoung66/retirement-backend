@@ -43,6 +43,12 @@ export const createUserRepo = (): IUserRepo => ({
       : null;
   },
 
+  async findAuthById(id: number) {
+    // 탈퇴 재인증용 — password 포함
+    const user = await prisma.user.findUnique({ where: { id } });
+    return user ? toAuthRecord(user) : null;
+  },
+
   async create(email: string, hashedPassword: string, name: string) {
     // 이메일·비밀번호 사용자 생성
     const user = await prisma.user.create({
@@ -72,6 +78,11 @@ export const createUserRepo = (): IUserRepo => ({
       data,
     });
     return { id: user.id, email: user.email, name: user.name };
+  },
+
+  async deleteById(id: number) {
+    // Cascade로 진단·시뮬레이션·포트폴리오 함께 삭제
+    await prisma.user.delete({ where: { id } });
   },
 });
 
