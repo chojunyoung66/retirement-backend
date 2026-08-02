@@ -5,6 +5,7 @@ export interface DiagnosisData {
   nationalPension: number;
   retirementPension: number;
   personalPension: number;
+  housingPension: number;
   monthlyExpense: number;
   healthInsurance: number;
   privateInsurance: number;

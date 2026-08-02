@@ -15,6 +15,7 @@ describe("DiagnosisService", () => {
     nationalPension: 900000,
     retirementPension: 500000,
     personalPension: 300000,
+    housingPension: 800000,
     monthlyExpense: 2500000,
     healthInsurance: 150000,
     privateInsurance: 200000,

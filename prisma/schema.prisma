@@ -42,6 +42,7 @@ model Diagnosis {
   nationalPension   Int
   retirementPension Int
   personalPension   Int
+  housingPension    Int @default(0)
   monthlyExpense    Int
   healthInsurance   Int @default(0)
   privateInsurance  Int @default(0)
