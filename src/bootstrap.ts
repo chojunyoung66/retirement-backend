@@ -72,7 +72,7 @@ export const createApp = () => {
     jwtUtil,
     googleTokenVerifier,
   );
-  const userService = createUserService(userRepo);
+  const userService = createUserService(userRepo, hashUtil);
   const simulationService = createSimulationService(simulationRepo);
   const portfolioService = createPortfolioService(portfolioRepo);
   const diagnosisService = createDiagnosisService(diagnosisRepo);

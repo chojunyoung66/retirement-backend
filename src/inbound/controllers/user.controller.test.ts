@@ -19,6 +19,7 @@ describe("UserController", () => {
     mockUserService = {
       getProfile: jest.fn(),
       updateProfile: jest.fn(),
+      deleteAccount: jest.fn(),
     };
 
     mockJwtUtil = {
@@ -41,6 +42,7 @@ describe("UserController", () => {
         id: 1,
         email: "test@example.com",
         name: "테스트유저",
+        hasPassword: true,
       };
 
       (mockUserService.getProfile as jest.Mock).mockResolvedValueOnce(mockProfile);
@@ -198,6 +200,49 @@ describe("UserController", () => {
 
       expect(response.status).toBe(401);
       expect(response.body.error.code).toBe("UNAUTHORIZED");
+    });
+  });
+
+  describe("DELETE /users/me", () => {
+    it("비밀번호 확인 후 탈퇴 성공·쿠키 삭제", async () => {
+      (mockUserService.deleteAccount as jest.Mock).mockResolvedValueOnce(
+        undefined,
+      );
+
+      const response = await request(app)
+        .delete("/users/me")
+        .set("Authorization", "Bearer valid_token")
+        .send({ password: "password12" });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(mockUserService.deleteAccount).toHaveBeenCalledWith(1, {
+        password: "password12",
+      });
+      const setCookie = response.headers["set-cookie"];
+      const cookieText = Array.isArray(setCookie)
+        ? setCookie.join(" ")
+        : (setCookie ?? "");
+      expect(cookieText.toLowerCase()).toMatch(/retirement_token=/);
+    });
+
+    it("확인 정보 없으면 400", async () => {
+      const response = await request(app)
+        .delete("/users/me")
+        .set("Authorization", "Bearer valid_token")
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
+      expect(mockUserService.deleteAccount).not.toHaveBeenCalled();
+    });
+
+    it("인증 없이 접근하면 401", async () => {
+      const response = await request(app)
+        .delete("/users/me")
+        .send({ password: "password12" });
+
+      expect(response.status).toBe(401);
     });
   });
 });

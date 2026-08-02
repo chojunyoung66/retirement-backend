@@ -1,48 +1,64 @@
 import type { IUserRepo } from "../contracts/user-repo.contract.js";
-import { createUserService } from "./user.service.js";
+import type { IHashUtil } from "../../shared/contracts/hash-util.contract.js";
+import { createUserService, WITHDRAWAL_PHRASE } from "./user.service.js";
 
 describe("UserService", () => {
   let userService: ReturnType<typeof createUserService>;
   let mockUserRepo: Partial<IUserRepo>;
+  let mockHashUtil: Partial<IHashUtil>;
 
   beforeEach(() => {
     // 의존성 Mock 설정
     mockUserRepo = {
       findById: jest.fn(),
+      findAuthById: jest.fn(),
       update: jest.fn(),
+      deleteById: jest.fn(),
     };
 
-    userService = createUserService(mockUserRepo as IUserRepo);
+    mockHashUtil = {
+      compare: jest.fn(),
+      hash: jest.fn(),
+    };
+
+    userService = createUserService(
+      mockUserRepo as IUserRepo,
+      mockHashUtil as IHashUtil,
+    );
   });
 
   describe("getProfile", () => {
     it("해피패스: userId로 사용자 정보를 조회", async () => {
       // given
       const userId = 1;
-      const expectedUser = {
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
         id: userId,
         email: "test@example.com",
+        password: "hashed",
         name: "테스트유저",
-      };
-
-      (mockUserRepo.findById as jest.Mock).mockResolvedValueOnce(expectedUser);
+        googleSub: null,
+        profileImage: null,
+      });
 
       // when
       const result = await userService.getProfile(userId);
 
       // then
-      expect(mockUserRepo.findById).toHaveBeenCalledWith(userId);
-      expect(result).toEqual(expectedUser);
-      // 반환 DTO에 password 필드가 없어야 함 (보안)
+      expect(mockUserRepo.findAuthById).toHaveBeenCalledWith(userId);
+      expect(result).toEqual({
+        id: userId,
+        email: "test@example.com",
+        name: "테스트유저",
+        hasPassword: true,
+      });
       expect(result).not.toHaveProperty("password");
-      expect(Object.keys(result).sort()).toEqual(["email", "id", "name"]);
     });
 
     it("존재하지 않는 userId로 조회 시 USER_NOT_FOUND 예외 발생", async () => {
       // given
       const userId = 9999;
 
-      (mockUserRepo.findById as jest.Mock).mockResolvedValueOnce(null);
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce(null);
 
       // when & then
       await expect(userService.getProfile(userId)).rejects.toMatchObject({
@@ -50,8 +66,7 @@ describe("UserService", () => {
         statusCode: 404,
       });
 
-      // 존재하지 않는 사용자는 조회하려고만 시도
-      expect(mockUserRepo.findById).toHaveBeenCalledWith(userId);
+      expect(mockUserRepo.findAuthById).toHaveBeenCalledWith(userId);
     });
   });
 
@@ -73,10 +88,15 @@ describe("UserService", () => {
 
       // then
       expect(mockUserRepo.update).toHaveBeenCalledWith(userId, { name: newName });
-      expect(result).toEqual(updatedUser);
+      expect(result).toEqual({ ...updatedUser, hasPassword: true });
       // 반환 DTO에 password 필드가 없어야 함 (보안)
       expect(result).not.toHaveProperty("password");
-      expect(Object.keys(result).sort()).toEqual(["email", "id", "name"]);
+      expect(Object.keys(result).sort()).toEqual([
+        "email",
+        "hasPassword",
+        "id",
+        "name",
+      ]);
     });
 
     it("해피패스: 사용자 비밀번호를 업데이트", async () => {
@@ -92,14 +112,23 @@ describe("UserService", () => {
       (mockUserRepo.update as jest.Mock).mockResolvedValueOnce(updatedUser);
 
       // when
-      const result = await userService.updateProfile(userId, { password: newPassword });
+      const result = await userService.updateProfile(userId, {
+        password: newPassword,
+      });
 
       // then
-      expect(mockUserRepo.update).toHaveBeenCalledWith(userId, { password: newPassword });
-      expect(result).toEqual(updatedUser);
+      expect(mockUserRepo.update).toHaveBeenCalledWith(userId, {
+        password: newPassword,
+      });
+      expect(result).toEqual({ ...updatedUser, hasPassword: true });
       // 반환 DTO에 password 필드가 없어야 함 (보안)
       expect(result).not.toHaveProperty("password");
-      expect(Object.keys(result).sort()).toEqual(["email", "id", "name"]);
+      expect(Object.keys(result).sort()).toEqual([
+        "email",
+        "hasPassword",
+        "id",
+        "name",
+      ]);
     });
 
     it("업데이트할 필드가 없을 때({}) INVALID_UPDATE 예외 발생", async () => {
@@ -108,7 +137,9 @@ describe("UserService", () => {
       const emptyData = {};
 
       // when & then
-      await expect(userService.updateProfile(userId, emptyData)).rejects.toMatchObject({
+      await expect(
+        userService.updateProfile(userId, emptyData),
+      ).rejects.toMatchObject({
         code: "INVALID_UPDATE",
         statusCode: 400,
       });
@@ -128,13 +159,97 @@ describe("UserService", () => {
       const dataWithEmptyName = { name: "" };
 
       // when & then: 실제로는 name 필드를 제공했지만, 현재 코드는 빈 문자열을 "없음"으로 취급
-      await expect(userService.updateProfile(userId, dataWithEmptyName)).rejects.toMatchObject({
+      await expect(
+        userService.updateProfile(userId, dataWithEmptyName),
+      ).rejects.toMatchObject({
         code: "INVALID_UPDATE",
         statusCode: 400,
       });
 
       // 사전 검증 실패로 repo.update는 호출되지 않음
       expect(mockUserRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("deleteAccount", () => {
+    it("해피패스: 비밀번호 확인 후 계정을 삭제한다", async () => {
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: 1,
+        email: "test@example.com",
+        password: "hashed",
+        name: "테스트",
+        googleSub: null,
+        profileImage: null,
+      });
+      (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(true);
+      (mockUserRepo.deleteById as jest.Mock).mockResolvedValueOnce(undefined);
+
+      await userService.deleteAccount(1, { password: "password12" });
+
+      expect(mockHashUtil.compare).toHaveBeenCalledWith("password12", "hashed");
+      expect(mockUserRepo.deleteById).toHaveBeenCalledWith(1);
+    });
+
+    it("비밀번호가 틀리면 INVALID_CREDENTIALS", async () => {
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: 1,
+        email: "test@example.com",
+        password: "hashed",
+        name: "테스트",
+        googleSub: null,
+        profileImage: null,
+      });
+      (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      await expect(
+        userService.deleteAccount(1, { password: "wrong" }),
+      ).rejects.toMatchObject({
+        code: "INVALID_CREDENTIALS",
+        statusCode: 401,
+      });
+      expect(mockUserRepo.deleteById).not.toHaveBeenCalled();
+    });
+
+    it("해피패스: Google-only는 이메일·문구 확인 후 삭제", async () => {
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: 2,
+        email: "google@example.com",
+        password: null,
+        name: "구글유저",
+        googleSub: "sub-1",
+        profileImage: null,
+      });
+      (mockUserRepo.deleteById as jest.Mock).mockResolvedValueOnce(undefined);
+
+      await userService.deleteAccount(2, {
+        emailConfirm: "google@example.com",
+        phrase: WITHDRAWAL_PHRASE,
+      });
+
+      expect(mockHashUtil.compare).not.toHaveBeenCalled();
+      expect(mockUserRepo.deleteById).toHaveBeenCalledWith(2);
+    });
+
+    it("Google-only 확인 정보가 틀리면 INVALID_REQUEST", async () => {
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: 2,
+        email: "google@example.com",
+        password: null,
+        name: "구글유저",
+        googleSub: "sub-1",
+        profileImage: null,
+      });
+
+      await expect(
+        userService.deleteAccount(2, {
+          emailConfirm: "other@example.com",
+          phrase: WITHDRAWAL_PHRASE,
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_REQUEST",
+        statusCode: 400,
+      });
+      expect(mockUserRepo.deleteById).not.toHaveBeenCalled();
     });
   });
 });

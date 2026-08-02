@@ -19,6 +19,8 @@ export interface IUserRepo {
     name: string;
     profileImage: string | null;
   } | null>;
+  /** 탈퇴 재인증용 — password 포함 */
+  findAuthById(id: number): Promise<UserAuthRecord | null>;
   create(
     email: string,
     hashedPassword: string,
@@ -39,4 +41,5 @@ export interface IUserRepo {
       profileImage?: string | null;
     },
   ): Promise<{ id: number; email: string; name: string }>;
+  deleteById(id: number): Promise<void>;
 }
