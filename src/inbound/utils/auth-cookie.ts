@@ -1,6 +1,6 @@
 import type { CookieOptions, Response } from "express";
 
-/** FE localStorage 키와 동일한 이름으로 듀얼 모드 전환을 단순화 */
+/** 브라우저 세션 JWT — HttpOnly 쿠키 전용 */
 export const AUTH_COOKIE_NAME = "retirement_token";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
