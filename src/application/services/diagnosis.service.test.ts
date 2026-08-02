@@ -85,11 +85,14 @@ describe("DiagnosisService", () => {
       // when
       const result = await diagnosisService.saveLatest(userId, diagnosisData);
 
-      // then
-      expect(mockDiagnosisRepo.upsert).toHaveBeenCalledWith(
-        userId,
-        diagnosisData,
-      );
+      // then — 예상은퇴 소득은 0으로만 저장
+      expect(mockDiagnosisRepo.upsert).toHaveBeenCalledWith(userId, {
+        ...diagnosisData,
+        nationalPension: 0,
+        retirementPension: 0,
+        personalPension: 0,
+        housingPension: 0,
+      });
       expect(result).toEqual(saved);
     });
   });
