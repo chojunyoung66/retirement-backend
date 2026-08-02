@@ -13,6 +13,10 @@ export const diagnosisDataSchema = z.object({
   nationalPension: z.number().nonnegative("국민연금은 0 이상이어야 합니다"),
   retirementPension: z.number().nonnegative("퇴직연금은 0 이상이어야 합니다"),
   personalPension: z.number().nonnegative("개인연금은 0 이상이어야 합니다"),
+  housingPension: z
+    .number()
+    .nonnegative("주택연금은 0 이상이어야 합니다")
+    .default(0),
   monthlyExpense: z.number().nonnegative("월 지출은 0 이상이어야 합니다"),
   healthInsurance: z.number().nonnegative("건강보험료는 0 이상이어야 합니다").default(0),
   privateInsurance: z.number().nonnegative("민영보험료는 0 이상이어야 합니다").default(0),
