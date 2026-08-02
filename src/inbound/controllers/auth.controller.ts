@@ -1,5 +1,8 @@
 import { Router, Request, Response, NextFunction } from "express";
-import type { AuthServiceType } from "../../application/services/auth.service.js";
+import type {
+  AuthResult,
+  AuthServiceType,
+} from "../../application/services/auth.service.js";
 import { BusinessException } from "../../shared/exceptions/business.exception.js";
 import {
   signupDataSchema,
@@ -13,6 +16,15 @@ type AuthMiddleware = (
   res: Response,
   next: NextFunction,
 ) => void;
+
+/** JWT는 HttpOnly 쿠키로만 전달 — JSON body에는 프로필만 */
+function toPublicAuthData(result: AuthResult) {
+  return {
+    id: result.id,
+    email: result.email,
+    name: result.name,
+  };
+}
 
 export const createAuthController = (
   authService: AuthServiceType,
@@ -38,9 +50,8 @@ export const createAuthController = (
       const { email, password, name } = validation.data;
       const result = await authService.signup(email, password, name);
 
-      // JSON token 유지(구 클라이언트) + HttpOnly 쿠키 병행
       setAuthCookie(res, result.token);
-      res.status(201).json({ success: true, data: result });
+      res.status(201).json({ success: true, data: toPublicAuthData(result) });
     } catch (error) {
       next(error);
     }
@@ -65,7 +76,7 @@ export const createAuthController = (
       const result = await authService.signin(email, password);
 
       setAuthCookie(res, result.token);
-      res.status(200).json({ success: true, data: result });
+      res.status(200).json({ success: true, data: toPublicAuthData(result) });
     } catch (error) {
       next(error);
     }
@@ -89,7 +100,7 @@ export const createAuthController = (
       const result = await authService.googleSignIn(validation.data.idToken);
 
       setAuthCookie(res, result.token);
-      res.status(200).json({ success: true, data: result });
+      res.status(200).json({ success: true, data: toPublicAuthData(result) });
     } catch (error) {
       next(error);
     }

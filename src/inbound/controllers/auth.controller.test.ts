@@ -67,7 +67,17 @@ describe("AuthController", () => {
       // then
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockResult);
+      expect(response.body.data).toEqual({
+        id: mockResult.id,
+        email: mockResult.email,
+        name: mockResult.name,
+      });
+      expect(response.body.data.token).toBeUndefined();
+      const setCookie = response.headers["set-cookie"];
+      const cookieText = Array.isArray(setCookie)
+        ? setCookie.join(" ")
+        : (setCookie ?? "");
+      expect(cookieText).toContain("retirement_token=");
       expect(mockAuthService.signup).toHaveBeenCalledWith(
         signupData.email,
         signupData.password,
@@ -159,7 +169,17 @@ describe("AuthController", () => {
       // then
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockResult);
+      expect(response.body.data).toEqual({
+        id: mockResult.id,
+        email: mockResult.email,
+        name: mockResult.name,
+      });
+      expect(response.body.data.token).toBeUndefined();
+      const setCookie = response.headers["set-cookie"];
+      const cookieText = Array.isArray(setCookie)
+        ? setCookie.join(" ")
+        : (setCookie ?? "");
+      expect(cookieText).toContain("retirement_token=");
       expect(mockAuthService.signup).toHaveBeenCalledWith(
         signupData.email,
         signupData.password,
@@ -189,7 +209,17 @@ describe("AuthController", () => {
       // then
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockResult);
+      expect(response.body.data).toEqual({
+        id: mockResult.id,
+        email: mockResult.email,
+        name: mockResult.name,
+      });
+      expect(response.body.data.token).toBeUndefined();
+      const setCookie = response.headers["set-cookie"];
+      const cookieText = Array.isArray(setCookie)
+        ? setCookie.join(" ")
+        : (setCookie ?? "");
+      expect(cookieText).toContain("retirement_token=");
       expect(mockAuthService.signup).toHaveBeenCalledWith(
         signupData.email,
         signupData.password,
@@ -245,7 +275,17 @@ describe("AuthController", () => {
       // then
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockResult);
+      expect(response.body.data).toEqual({
+        id: mockResult.id,
+        email: mockResult.email,
+        name: mockResult.name,
+      });
+      expect(response.body.data.token).toBeUndefined();
+      const setCookie = response.headers["set-cookie"];
+      const cookieText = Array.isArray(setCookie)
+        ? setCookie.join(" ")
+        : (setCookie ?? "");
+      expect(cookieText).toContain("retirement_token=");
       expect(mockAuthService.signin).toHaveBeenCalledWith(
         signinData.email,
         signinData.password
@@ -324,7 +364,17 @@ describe("AuthController", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(mockResult);
+      expect(response.body.data).toEqual({
+        id: mockResult.id,
+        email: mockResult.email,
+        name: mockResult.name,
+      });
+      expect(response.body.data.token).toBeUndefined();
+      const setCookie = response.headers["set-cookie"];
+      const cookieText = Array.isArray(setCookie)
+        ? setCookie.join(" ")
+        : (setCookie ?? "");
+      expect(cookieText).toContain("retirement_token=");
       expect(mockAuthService.googleSignIn).toHaveBeenCalledWith(
         "google_id_token",
       );
