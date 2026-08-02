@@ -5,14 +5,17 @@ export const AUTH_COOKIE_NAME = "retirement_token";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Vercel↔Render 크로스오리진: SameSite=None + Secure 필수
+/**
+ * Path=/api: 동일 출처 프록시(/api/*)에만 쿠키 전송
+ * SameSite=Lax: Vercel 1st-party 프록시 기준 (크로스사이트 None 불필요)
+ */
 export function authCookieOptions(): CookieOptions {
   const isProd = process.env.NODE_ENV === "production";
   return {
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? "none" : "lax",
-    path: "/",
+    sameSite: "lax",
+    path: "/api",
     maxAge: SEVEN_DAYS_MS,
   };
 }
