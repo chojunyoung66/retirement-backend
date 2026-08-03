@@ -280,7 +280,7 @@ describe("UserService", () => {
       expect(mockUserRepo.deleteById).not.toHaveBeenCalled();
     });
 
-    it("해피패스: Google-only는 이메일·문구 확인 후 삭제", async () => {
+    it("해피패스: Google-only는 이메일·문구 확인 후 삭제(시뮬레이션 포함 cascade 진입점)", async () => {
       (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
         id: 2,
         email: "google@example.com",
@@ -296,8 +296,10 @@ describe("UserService", () => {
         phrase: WITHDRAWAL_PHRASE,
       });
 
+      // Google-only도 동일하게 deleteById → repo에서 시뮬/진단 일괄 삭제
       expect(mockHashUtil.compare).not.toHaveBeenCalled();
       expect(mockUserRepo.deleteById).toHaveBeenCalledWith(2);
+      expect(mockUserRepo.deleteById).toHaveBeenCalledTimes(1);
     });
 
     it("Google-only 확인 정보가 틀리면 INVALID_REQUEST", async () => {

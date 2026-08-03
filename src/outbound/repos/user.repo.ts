@@ -81,8 +81,16 @@ export const createUserRepo = (): IUserRepo => ({
   },
 
   async deleteById(id: number) {
-    // Cascade로 진단·시뮬레이션·포트폴리오 함께 삭제
-    await prisma.user.delete({ where: { id } });
+    // 탈퇴 시 시뮬레이션·진단 등 연관 데이터를 트랜잭션으로 명시 삭제
+    // (DB ON DELETE CASCADE 보강 — Google-only 포함 모든 계정 공통)
+    await prisma.$transaction(async (tx) => {
+      await tx.simulationResult.deleteMany({ where: { userId: id } });
+      await tx.diagnosis.deleteMany({ where: { userId: id } });
+      await tx.healthInsuranceSimulation.deleteMany({ where: { userId: id } });
+      await tx.isaSimulation.deleteMany({ where: { userId: id } });
+      await tx.pensionPortfolio.deleteMany({ where: { userId: id } });
+      await tx.user.delete({ where: { id } });
+    });
   },
 });
 
