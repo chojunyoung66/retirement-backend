@@ -1,10 +1,13 @@
 import jwt from "jsonwebtoken";
 import type { IJwtUtil } from "../contracts/jwt-util.contract.js";
+import { IDLE_EXPIRES_IN } from "../session-policy.js";
 
 export const createJwtUtil = (secret: string): IJwtUtil => ({
   sign(payload: Record<string, unknown>, expiresIn?: string): string {
-    // 페이로드를 비밀키로 서명하여 토큰 생성
-    return jwt.sign(payload, secret, { expiresIn: (expiresIn ?? "7d") as jwt.SignOptions["expiresIn"] });
+    // 기본 유휴 30분 — 미들웨어에서 슬라이딩 갱신
+    return jwt.sign(payload, secret, {
+      expiresIn: (expiresIn ?? IDLE_EXPIRES_IN) as jwt.SignOptions["expiresIn"],
+    });
   },
 
   verify(token: string): Record<string, unknown> {

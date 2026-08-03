@@ -34,11 +34,14 @@ describe("AuthMiddleware", () => {
     app.use(errorMiddleware);
   });
 
-  it("해피패스: 유효한 Bearer 토큰이면 다음 핸들러로 진행", async () => {
+  it("해피패스: 유효한 Bearer 토큰이면 다음 핸들러로 진행하고 세션을 슬라이딩 갱신", async () => {
+    const sessionStartedAt = Date.now();
     (mockJwtUtil.verify as jest.Mock).mockReturnValueOnce({
       userId: 42,
       email: "test@example.com",
+      sessionStartedAt,
     });
+    (mockJwtUtil.sign as jest.Mock).mockReturnValueOnce("refreshed.jwt.token");
 
     const response = await request(app)
       .get("/protected")
@@ -48,13 +51,21 @@ describe("AuthMiddleware", () => {
     expect(response.body.success).toBe(true);
     expect(response.body.data.userId).toBe(42);
     expect(mockJwtUtil.verify).toHaveBeenCalledWith("valid.jwt.token");
+    expect(mockJwtUtil.sign).toHaveBeenCalled();
+    const setCookie = response.headers["set-cookie"];
+    const cookieText = Array.isArray(setCookie)
+      ? setCookie.join(" ")
+      : (setCookie ?? "");
+    expect(cookieText).toContain("retirement_token=");
   });
 
   it("해피패스: HttpOnly 쿠키 토큰이면 다음 핸들러로 진행", async () => {
     (mockJwtUtil.verify as jest.Mock).mockReturnValueOnce({
       userId: 7,
       email: "cookie@example.com",
+      sessionStartedAt: Date.now(),
     });
+    (mockJwtUtil.sign as jest.Mock).mockReturnValueOnce("refreshed.cookie.jwt");
 
     const response = await request(app)
       .get("/protected")
@@ -63,6 +74,22 @@ describe("AuthMiddleware", () => {
     expect(response.status).toBe(200);
     expect(response.body.data.userId).toBe(7);
     expect(mockJwtUtil.verify).toHaveBeenCalledWith("cookie.jwt.token");
+  });
+
+  it("절대 세션(12시간) 만료면 SESSION_EXPIRED", async () => {
+    (mockJwtUtil.verify as jest.Mock).mockReturnValueOnce({
+      userId: 1,
+      email: "old@example.com",
+      sessionStartedAt: Date.now() - 13 * 60 * 60 * 1000,
+    });
+
+    const response = await request(app)
+      .get("/protected")
+      .set("Authorization", "Bearer old.jwt.token");
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("SESSION_EXPIRED");
+    expect(mockJwtUtil.sign).not.toHaveBeenCalled();
   });
 
   it("Authorization 헤더가 없으면 401 UNAUTHORIZED", async () => {

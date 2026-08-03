@@ -1,7 +1,13 @@
 import { Request, Response, NextFunction } from "express";
 import type { IJwtUtil } from "../../shared/contracts/jwt-util.contract.js";
 import { BusinessException } from "../../shared/exceptions/business.exception.js";
-import { AUTH_COOKIE_NAME } from "../utils/auth-cookie.js";
+import {
+  createAuthTokenPayload,
+  nextIdleTtlMs,
+  remainingAbsoluteMs,
+  resolveSessionStartedAtMs,
+} from "../../shared/session-policy.js";
+import { AUTH_COOKIE_NAME, setAuthCookie } from "../utils/auth-cookie.js";
 
 function extractToken(req: Request): string | null {
   // Bearer 우선 — 기존 클라이언트·테스트 호환
@@ -34,9 +40,30 @@ export const createAuthMiddleware = (jwtUtil: IJwtUtil) => {
 
       // 토큰 검증
       const payload = jwtUtil.verify(token);
+      const userId = payload.userId as number;
+      const email = String(payload.email ?? "");
+      const sessionStartedAt = resolveSessionStartedAtMs(payload);
+
+      // 절대 12시간 만료
+      if (remainingAbsoluteMs(sessionStartedAt) <= 0) {
+        throw new BusinessException(
+          "SESSION_EXPIRED",
+          "세션이 만료되었습니다. 다시 로그인해 주세요",
+          401,
+        );
+      }
+
+      // 유휴 슬라이딩 — 요청마다 TTL 갱신 (절대 잔여로 상한)
+      const ttlMs = nextIdleTtlMs(sessionStartedAt);
+      const expiresInSec = Math.max(1, Math.ceil(ttlMs / 1000));
+      const refreshed = jwtUtil.sign(
+        createAuthTokenPayload(userId, email, sessionStartedAt),
+        `${expiresInSec}s`,
+      );
+      setAuthCookie(res, refreshed, ttlMs);
 
       // userId를 req에 설정 (컨트롤러에서 접근 가능)
-      req.userId = payload.userId as number;
+      req.userId = userId;
 
       next();
     } catch (error) {

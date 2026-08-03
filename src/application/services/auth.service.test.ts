@@ -68,7 +68,9 @@ describe("AuthService", () => {
         "hashed_password_123",
         name,
       );
-      expect(mockJwtUtil.sign).toHaveBeenCalledWith({ userId, email });
+      expect(mockJwtUtil.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ userId, email, sessionStartedAt: expect.any(Number) }),
+      );
       expect(result).toEqual({
         id: userId,
         email,
@@ -133,7 +135,9 @@ describe("AuthService", () => {
         password,
         hashedPassword,
       );
-      expect(mockJwtUtil.sign).toHaveBeenCalledWith({ userId, email });
+      expect(mockJwtUtil.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ userId, email, sessionStartedAt: expect.any(Number) }),
+      );
       expect(result).toEqual({
         id: userId,
         email,
@@ -221,10 +225,13 @@ describe("AuthService", () => {
         identity.googleSub,
       );
       expect(mockUserRepo.createGoogleUser).not.toHaveBeenCalled();
-      expect(mockJwtUtil.sign).toHaveBeenCalledWith({
-        userId: 10,
-        email: identity.email,
-      });
+      expect(mockJwtUtil.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 10,
+          email: identity.email,
+          sessionStartedAt: expect.any(Number),
+        }),
+      );
       expect(result).toEqual({
         id: 10,
         email: identity.email,
