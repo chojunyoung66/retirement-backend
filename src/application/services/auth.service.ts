@@ -26,6 +26,15 @@ export const createAuthService = (
     // 기존 사용자 중복 확인
     const existingUser = await userRepo.findByEmail(email);
     if (existingUser) {
+      // Google-only 계정 — 이메일 가입 대신 Google 로그인 안내
+      if (!existingUser.password && existingUser.googleSub) {
+        throw new BusinessException(
+          "GOOGLE_ONLY_ACCOUNT",
+          "이 이메일은 Google로 가입된 계정입니다. Google 로그인으로 이용해 주세요",
+          409,
+        );
+      }
+
       throw new BusinessException(
         "DUPLICATE_EMAIL",
         "이미 존재하는 이메일입니다",
