@@ -1,6 +1,8 @@
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 // Repos
 import { createUserRepo } from "./outbound/repos/user.repo.js";
@@ -34,8 +36,44 @@ import { createGoogleTokenVerifier } from "./shared/utils/google-token-verifier.
 // Router
 import { healthRouter } from "./inbound/routers/health.router.js";
 
+// 인증 엔드포인트는 브루트포스·크리덴셜 스터핑 방지를 위해 더 엄격한 요청 한도 적용
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: "TOO_MANY_REQUESTS",
+      message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요",
+    },
+  },
+});
+
+// 전체 API에 대한 기본 요청 한도 (남용·DoS성 트래픽 완화)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: "TOO_MANY_REQUESTS",
+      message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요",
+    },
+  },
+});
+
 export const createApp = () => {
   const app = express();
+
+  // Render 등 리버스 프록시 뒤에서도 클라이언트 IP 기준으로 rate limit이 동작하도록 설정
+  app.set("trust proxy", 1);
+
+  // 기본 HTTP 보안 헤더
+  app.use(helmet());
 
   // Middleware setup — credentials CORS (Vercel↔Render 쿠키)
   const frontendOrigin = process.env.FRONTEND_ORIGIN;
@@ -47,6 +85,7 @@ export const createApp = () => {
   );
   app.use(cookieParser());
   app.use(express.json());
+  app.use("/api", apiLimiter);
 
   // Utils 생성
   const jwtSecret = process.env.JWT_SECRET;
@@ -89,7 +128,7 @@ export const createApp = () => {
 
   // Public routes (인증 불필요)
   app.use("/health", healthRouter);
-  app.use("/api/auth", authController.router);
+  app.use("/api/auth", authLimiter, authController.router);
 
   // Protected routes (인증 필요)
   app.use("/api/users", authMiddleware, userController.router);
