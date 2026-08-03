@@ -42,7 +42,7 @@ export const createUserService = (
 
   async updateProfile(
     userId: number,
-    data: { name?: string; password?: string },
+    data: { name?: string; password?: string; currentPassword?: string },
   ): Promise<UserProfile> {
     // 부분 업데이트: name/password 중 최소 1개 필수
     if (!data.name && !data.password) {
@@ -53,14 +53,60 @@ export const createUserService = (
       );
     }
 
-    // 사용자 정보 업데이트
-    const updatedUser = await userRepo.update(userId, data);
+    const updateData: { name?: string; password?: string } = {};
+    if (data.name) updateData.name = data.name;
+
+    if (data.password) {
+      // 비밀번호 변경 시 계정 상태 확인
+      const user = await userRepo.findAuthById(userId);
+      if (!user) {
+        throw new BusinessException(
+          "USER_NOT_FOUND",
+          "사용자를 찾을 수 없습니다",
+          404,
+        );
+      }
+
+      // Google-only: 비밀번호가 없으면 이 API로 신규 설정 불가
+      if (!user.password) {
+        throw new BusinessException(
+          "PASSWORD_NOT_SET",
+          "Google 계정은 이 API로 비밀번호를 설정할 수 없습니다",
+          400,
+        );
+      }
+
+      // 현재 비밀번호 재확인
+      const ok = await hashUtil.compare(
+        data.currentPassword ?? "",
+        user.password,
+      );
+      if (!ok) {
+        throw new BusinessException(
+          "INVALID_CREDENTIALS",
+          "현재 비밀번호가 올바르지 않습니다",
+          401,
+        );
+      }
+
+      // 평문 저장 방지 — bcrypt 해시 후 보관
+      updateData.password = await hashUtil.hash(data.password);
+    }
+
+    const updatedUser = await userRepo.update(userId, updateData);
+
+    // 방금 비밀번호를 설정했으면 true, 아니면 기존 계정 상태 조회
+    let hasPassword = Boolean(data.password);
+    if (!hasPassword) {
+      const auth = await userRepo.findAuthById(userId);
+      hasPassword = Boolean(auth?.password);
+    }
 
     return {
       id: updatedUser.id,
       email: updatedUser.email,
       name: updatedUser.name,
-      hasPassword: true,
+      hasPassword,
     };
   },
 

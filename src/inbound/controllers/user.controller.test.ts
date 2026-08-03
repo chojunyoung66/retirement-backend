@@ -112,13 +112,17 @@ describe("UserController", () => {
       expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, { name: "변경된이름" });
     });
 
-    it("비밀번호 업데이트 성공", async () => {
+    it("비밀번호 업데이트 성공 — 현재 비밀번호 포함", async () => {
       // given
-      const updateData = { password: "newpassword123" };
+      const updateData = {
+        password: "newpassword123",
+        currentPassword: "oldpassword12",
+      };
       const mockResult = {
         id: 1,
         email: "test@example.com",
         name: "테스트유저",
+        hasPassword: true,
       };
 
       (mockUserService.updateProfile as jest.Mock).mockResolvedValueOnce(mockResult);
@@ -133,16 +137,24 @@ describe("UserController", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toEqual(mockResult);
-      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, { password: "newpassword123" });
+      expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
+        password: "newpassword123",
+        currentPassword: "oldpassword12",
+      });
     });
 
     it("이름과 비밀번호 동시 업데이트 성공", async () => {
       // given
-      const updateData = { name: "새이름", password: "newpassword123" };
+      const updateData = {
+        name: "새이름",
+        password: "newpassword123",
+        currentPassword: "oldpassword12",
+      };
       const mockResult = {
         id: 1,
         email: "test@example.com",
         name: "새이름",
+        hasPassword: true,
       };
 
       (mockUserService.updateProfile as jest.Mock).mockResolvedValueOnce(mockResult);
@@ -159,7 +171,19 @@ describe("UserController", () => {
       expect(mockUserService.updateProfile).toHaveBeenCalledWith(1, {
         name: "새이름",
         password: "newpassword123",
+        currentPassword: "oldpassword12",
       });
+    });
+
+    it("비밀번호만 보내고 현재 비밀번호가 없으면 400", async () => {
+      const response = await request(app)
+        .patch("/users/me")
+        .set("Authorization", "Bearer valid_token")
+        .send({ password: "newpassword123" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
+      expect(mockUserService.updateProfile).not.toHaveBeenCalled();
     });
 
     it("변경할 필드가 없으면 400 반환", async () => {
