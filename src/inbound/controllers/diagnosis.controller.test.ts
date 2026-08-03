@@ -13,11 +13,16 @@ describe("DiagnosisController", () => {
   let mockJwtUtil: Partial<IJwtUtil>;
 
   const diagnosisBody = {
-    householdType: "single",
+    householdType: "individual",
     birthYear: 1980,
     retirementYear: 2045,
-    monthlyIncome: 4000000,
+    nationalPension: 900000,
+    retirementPension: 500000,
+    personalPension: 300000,
+    housingPension: 800000,
     monthlyExpense: 2500000,
+    healthInsurance: 150000,
+    privateInsurance: 200000,
   };
 
   beforeEach(() => {
