@@ -76,6 +76,40 @@ describe("AuthMiddleware", () => {
     expect(mockJwtUtil.verify).toHaveBeenCalledWith("cookie.jwt.token");
   });
 
+  it("쿠키와 Bearer가 모두 있으면 쿠키를 우선한다", async () => {
+    (mockJwtUtil.verify as jest.Mock).mockReturnValueOnce({
+      userId: 7,
+      email: "cookie@example.com",
+      sessionStartedAt: Date.now(),
+    });
+    (mockJwtUtil.sign as jest.Mock).mockReturnValueOnce("refreshed.cookie.jwt");
+
+    const response = await request(app)
+      .get("/protected")
+      .set("Cookie", `${AUTH_COOKIE_NAME}=cookie.jwt.token`)
+      .set("Authorization", "Bearer bearer.jwt.token");
+
+    expect(response.status).toBe(200);
+    expect(mockJwtUtil.verify).toHaveBeenCalledWith("cookie.jwt.token");
+    expect(mockJwtUtil.verify).not.toHaveBeenCalledWith("bearer.jwt.token");
+  });
+
+  it("production에서는 Bearer만으로는 인증되지 않는다", async () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const response = await request(app)
+        .get("/protected")
+        .set("Authorization", "Bearer valid.jwt.token");
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe("UNAUTHORIZED");
+      expect(mockJwtUtil.verify).not.toHaveBeenCalled();
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
+  });
+
   it("절대 세션(12시간) 만료면 SESSION_EXPIRED", async () => {
     (mockJwtUtil.verify as jest.Mock).mockReturnValueOnce({
       userId: 1,
