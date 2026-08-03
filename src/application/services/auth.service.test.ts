@@ -105,6 +105,25 @@ describe("AuthService", () => {
       // 중복 검사 후 create가 호출되지 않아야 함
       expect(mockUserRepo.create).not.toHaveBeenCalled();
     });
+
+    it("Google-only 이메일이면 GOOGLE_ONLY_ACCOUNT로 안내", async () => {
+      (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce({
+        id: 2,
+        email: "google@example.com",
+        password: null,
+        name: "구글유저",
+        googleSub: "sub-xyz",
+        profileImage: null,
+      });
+
+      await expect(
+        authService.signup("google@example.com", "password123", "새이름"),
+      ).rejects.toMatchObject({
+        code: "GOOGLE_ONLY_ACCOUNT",
+        statusCode: 409,
+      });
+      expect(mockUserRepo.create).not.toHaveBeenCalled();
+    });
   });
 
   describe("signin", () => {
