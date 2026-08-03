@@ -57,6 +57,11 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
   // GET /api/pension-portfolios/:id
   router.get("/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const userId = req.userId;
+      if (!userId) {
+        throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
+      }
+
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       const portfolioId = parseInt(id, 10);
 
@@ -64,7 +69,8 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
         throw new BusinessException("INVALID_REQUEST", "유효한 포트폴리오 ID가 아닙니다", 400);
       }
 
-      const portfolio = await portfolioService.getById(portfolioId);
+      // 소유권 검증은 서비스에서 수행
+      const portfolio = await portfolioService.getById(portfolioId, userId);
 
       res.status(200).json({
         success: true,
@@ -78,6 +84,11 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
   // PATCH /api/pension-portfolios/:id
   router.patch("/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const userId = req.userId;
+      if (!userId) {
+        throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
+      }
+
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       const portfolioId = parseInt(id, 10);
 
@@ -92,7 +103,7 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
         throw new BusinessException("INVALID_UPDATE", message || "업데이트할 필드가 없습니다", 400);
       }
 
-      const updated = await portfolioService.update(portfolioId, validation.data);
+      const updated = await portfolioService.update(portfolioId, userId, validation.data);
 
       res.status(200).json({
         success: true,
@@ -106,6 +117,11 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
   // DELETE /api/pension-portfolios/:id
   router.delete("/:id", async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const userId = req.userId;
+      if (!userId) {
+        throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
+      }
+
       const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
       const portfolioId = parseInt(id, 10);
 
@@ -113,7 +129,7 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
         throw new BusinessException("INVALID_REQUEST", "유효한 포트폴리오 ID가 아닙니다", 400);
       }
 
-      const deleted = await portfolioService.delete(portfolioId);
+      const deleted = await portfolioService.delete(portfolioId, userId);
 
       res.status(200).json({
         success: true,

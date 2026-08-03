@@ -169,7 +169,7 @@ describe("PortfolioController", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data).toEqual(mockPortfolio);
-      expect(mockPortfolioService.getById).toHaveBeenCalledWith(1);
+      expect(mockPortfolioService.getById).toHaveBeenCalledWith(1, 1);
     });
 
     it("유효하지 않은 ID는 검증 실패", async () => {
@@ -229,7 +229,7 @@ describe("PortfolioController", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data.name).toBe("변경된 포트폴리오");
-      expect(mockPortfolioService.update).toHaveBeenCalledWith(1, updateData);
+      expect(mockPortfolioService.update).toHaveBeenCalledWith(1, 1, updateData);
     });
 
     it("빈 업데이트는 검증 실패", async () => {
@@ -254,7 +254,7 @@ describe("PortfolioController", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.data.deleted).toBe(true);
-      expect(mockPortfolioService.delete).toHaveBeenCalledWith(1);
+      expect(mockPortfolioService.delete).toHaveBeenCalledWith(1, 1);
     });
   });
 });

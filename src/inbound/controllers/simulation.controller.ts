@@ -818,6 +818,7 @@ export const createSimulationController = (
 
         const updated = await simulationService.updateSimulation(
           simulationId,
+          userId,
           validation.data,
         );
 
