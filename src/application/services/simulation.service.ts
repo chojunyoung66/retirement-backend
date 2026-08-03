@@ -171,6 +171,7 @@ export const createSimulationService = (simulationRepo: ISimulationRepo) => ({
 
   async updateSimulation(
     id: number,
+    userId: number,
     data: { status: string },
   ): Promise<SimulationResult> {
     // 존재 여부 확인
@@ -180,6 +181,15 @@ export const createSimulationService = (simulationRepo: ISimulationRepo) => ({
         "SIMULATION_NOT_FOUND",
         "시뮬레이션을 찾을 수 없습니다",
         404,
+      );
+    }
+
+    // 요청자 소유권 검증
+    if (existing.userId !== userId) {
+      throw new BusinessException(
+        "SIMULATION_FORBIDDEN",
+        "접근 권한이 없습니다",
+        403,
       );
     }
 

@@ -101,9 +101,10 @@ describe("PortfolioService", () => {
     it("해피패스: 포트폴리오를 조회", async () => {
       // given
       const portfolioId = 1;
+      const userId = 1;
       const expectedPortfolio = {
         id: portfolioId,
-        userId: 1,
+        userId,
         accountType: "IRP",
         name: "안정형 포트폴리오",
         items: [
@@ -115,7 +116,7 @@ describe("PortfolioService", () => {
       (mockPortfolioRepo.findById as jest.Mock).mockResolvedValueOnce(expectedPortfolio);
 
       // when
-      const result = await portfolioService.getById(portfolioId);
+      const result = await portfolioService.getById(portfolioId, userId);
 
       // then
       expect(mockPortfolioRepo.findById).toHaveBeenCalledWith(portfolioId);
@@ -128,14 +129,14 @@ describe("PortfolioService", () => {
       (mockPortfolioRepo.findById as jest.Mock).mockResolvedValueOnce(null);
 
       // when & then
-      await expect(portfolioService.getById(portfolioId)).rejects.toThrow(
+      await expect(portfolioService.getById(portfolioId, 1)).rejects.toThrow(
         expect.objectContaining({
           code: "PORTFOLIO_NOT_FOUND",
         })
       );
     });
 
-    it("보안 버그: getById는 소유권을 검증하지 않아 다른 유저의 포트폴리오도 조회 가능함(현재 동작 문서화)", async () => {
+    it("에지케이스: 다른 유저의 포트폴리오면 PORTFOLIO_FORBIDDEN 예외 발생", async () => {
       // given: id=1인 포트폴리오는 userId=1 소유
       const portfolioId = 1;
       const otherUsersPortfolio = {
@@ -148,16 +149,12 @@ describe("PortfolioService", () => {
 
       (mockPortfolioRepo.findById as jest.Mock).mockResolvedValueOnce(otherUsersPortfolio);
 
-      // when: 서비스 시그니처는 userId를 받지 않기 때문에
-      // 다른 유저(예: userId=2)라도 ID만 알면 조회에 성공한다.
-      // 이 테스트는 소유권 검증 부재 버그를 문서화한다.
-      const result = await portfolioService.getById(portfolioId);
-
-      // then: 다른 유저의 데이터가 그대로 반환된다 (FORBIDDEN이 던져지지 않음)
-      expect(mockPortfolioRepo.findById).toHaveBeenCalledWith(portfolioId);
-      expect(result).toEqual(otherUsersPortfolio);
-      // TODO(security): getById에 요청자 userId 인자를 추가하고 소유권 검증을 넣어야 함.
-      // 수정 시 이 테스트는 PORTFOLIO_FORBIDDEN 예외를 기대하도록 변경 필요.
+      // when & then: userId=2가 조회 시도
+      await expect(portfolioService.getById(portfolioId, 2)).rejects.toThrow(
+        expect.objectContaining({
+          code: "PORTFOLIO_FORBIDDEN",
+        }),
+      );
     });
   });
 
@@ -165,9 +162,10 @@ describe("PortfolioService", () => {
     it("해피패스: 포트폴리오 이름을 업데이트", async () => {
       // given
       const portfolioId = 1;
+      const userId = 1;
       const existingPortfolio = {
         id: portfolioId,
-        userId: 1,
+        userId,
         accountType: "IRP",
         name: "기존 포트폴리오",
         items: [{ symbol: "BOND", name: "채권 ETF", allocation: 100 }],
@@ -175,7 +173,7 @@ describe("PortfolioService", () => {
       const updateData = { name: "변경된 포트폴리오" };
       const updatedPortfolio = {
         id: portfolioId,
-        userId: 1,
+        userId,
         accountType: "IRP",
         name: "변경된 포트폴리오",
         items: [{ symbol: "BOND", name: "채권 ETF", allocation: 100 }],
@@ -185,7 +183,7 @@ describe("PortfolioService", () => {
       (mockPortfolioRepo.update as jest.Mock).mockResolvedValueOnce(updatedPortfolio);
 
       // when
-      const result = await portfolioService.update(portfolioId, updateData);
+      const result = await portfolioService.update(portfolioId, userId, updateData);
 
       // then
       expect(mockPortfolioRepo.findById).toHaveBeenCalledWith(portfolioId);
@@ -196,9 +194,10 @@ describe("PortfolioService", () => {
     it("해피패스: 포트폴리오 항목을 업데이트", async () => {
       // given
       const portfolioId = 1;
+      const userId = 1;
       const existingPortfolio = {
         id: portfolioId,
-        userId: 1,
+        userId,
         accountType: "IRP",
         name: "포트폴리오",
         items: [{ symbol: "BOND", name: "채권 ETF", allocation: 100 }],
@@ -210,7 +209,7 @@ describe("PortfolioService", () => {
       const updateData = { items: newItems };
       const updatedPortfolio = {
         id: portfolioId,
-        userId: 1,
+        userId,
         accountType: "IRP",
         name: "포트폴리오",
         items: newItems,
@@ -220,7 +219,7 @@ describe("PortfolioService", () => {
       (mockPortfolioRepo.update as jest.Mock).mockResolvedValueOnce(updatedPortfolio);
 
       // when
-      const result = await portfolioService.update(portfolioId, updateData);
+      const result = await portfolioService.update(portfolioId, userId, updateData);
 
       // then
       expect(mockPortfolioRepo.findById).toHaveBeenCalledWith(portfolioId);
@@ -234,7 +233,7 @@ describe("PortfolioService", () => {
       const updateData = {};
 
       // when & then
-      await expect(portfolioService.update(portfolioId, updateData)).rejects.toThrow(
+      await expect(portfolioService.update(portfolioId, 1, updateData)).rejects.toThrow(
         expect.objectContaining({
           code: "INVALID_UPDATE",
         })
@@ -249,10 +248,33 @@ describe("PortfolioService", () => {
       (mockPortfolioRepo.findById as jest.Mock).mockResolvedValueOnce(null);
 
       // when & then
-      await expect(portfolioService.update(portfolioId, updateData)).rejects.toThrow(
+      await expect(portfolioService.update(portfolioId, 1, updateData)).rejects.toThrow(
         expect.objectContaining({
           code: "PORTFOLIO_NOT_FOUND",
         })
+      );
+      expect(mockPortfolioRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("에지케이스: 다른 유저의 포트폴리오를 업데이트하면 PORTFOLIO_FORBIDDEN 예외 발생", async () => {
+      // given
+      const portfolioId = 1;
+      const existingPortfolio = {
+        id: portfolioId,
+        userId: 1,
+        accountType: "IRP",
+        name: "다른 유저 포트폴리오",
+        items: [{ symbol: "BOND", name: "채권 ETF", allocation: 100 }],
+      };
+      (mockPortfolioRepo.findById as jest.Mock).mockResolvedValueOnce(existingPortfolio);
+
+      // when & then
+      await expect(
+        portfolioService.update(portfolioId, 2, { name: "가로채기" }),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          code: "PORTFOLIO_FORBIDDEN",
+        }),
       );
       expect(mockPortfolioRepo.update).not.toHaveBeenCalled();
     });
@@ -262,15 +284,46 @@ describe("PortfolioService", () => {
     it("해피패스: 포트폴리오를 삭제", async () => {
       // given
       const portfolioId = 1;
+      const userId = 1;
+      const existingPortfolio = {
+        id: portfolioId,
+        userId,
+        accountType: "IRP",
+        name: "삭제할 포트폴리오",
+        items: [{ symbol: "BOND", name: "채권 ETF", allocation: 100 }],
+      };
 
+      (mockPortfolioRepo.findById as jest.Mock).mockResolvedValueOnce(existingPortfolio);
       (mockPortfolioRepo.delete as jest.Mock).mockResolvedValueOnce(true);
 
       // when
-      const result = await portfolioService.delete(portfolioId);
+      const result = await portfolioService.delete(portfolioId, userId);
 
       // then
+      expect(mockPortfolioRepo.findById).toHaveBeenCalledWith(portfolioId);
       expect(mockPortfolioRepo.delete).toHaveBeenCalledWith(portfolioId);
       expect(result).toBe(true);
+    });
+
+    it("에지케이스: 다른 유저의 포트폴리오를 삭제하면 PORTFOLIO_FORBIDDEN 예외 발생", async () => {
+      // given
+      const portfolioId = 1;
+      const existingPortfolio = {
+        id: portfolioId,
+        userId: 1,
+        accountType: "IRP",
+        name: "다른 유저 포트폴리오",
+        items: [{ symbol: "BOND", name: "채권 ETF", allocation: 100 }],
+      };
+      (mockPortfolioRepo.findById as jest.Mock).mockResolvedValueOnce(existingPortfolio);
+
+      // when & then
+      await expect(portfolioService.delete(portfolioId, 2)).rejects.toThrow(
+        expect.objectContaining({
+          code: "PORTFOLIO_FORBIDDEN",
+        }),
+      );
+      expect(mockPortfolioRepo.delete).not.toHaveBeenCalled();
     });
   });
 });

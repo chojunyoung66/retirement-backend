@@ -760,7 +760,7 @@ describe("SimulationController", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual(mockResult);
-      expect(mockSimulationService.updateSimulation).toHaveBeenCalledWith(1, {
+      expect(mockSimulationService.updateSimulation).toHaveBeenCalledWith(1, 1, {
         status: "confirmed",
       });
     });

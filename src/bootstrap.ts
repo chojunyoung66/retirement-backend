@@ -77,6 +77,10 @@ export const createApp = () => {
 
   // Middleware setup — credentials CORS (Vercel↔Render 쿠키)
   const frontendOrigin = process.env.FRONTEND_ORIGIN;
+  // production에서 미설정 시 Origin 반사 CORS 방지
+  if (process.env.NODE_ENV === "production" && !frontendOrigin) {
+    throw new Error("FRONTEND_ORIGIN 환경변수가 설정되지 않았습니다.");
+  }
   app.use(
     cors({
       origin: frontendOrigin || true,

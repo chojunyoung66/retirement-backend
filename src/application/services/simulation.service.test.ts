@@ -721,12 +721,13 @@ describe("SimulationService", () => {
     it("존재하지 않는 시뮬레이션 ID로 수정 시 SIMULATION_NOT_FOUND 예외 발생", async () => {
       // given
       const id = 999;
+      const userId = 1;
 
       (mockSimulationRepo.findById as jest.Mock).mockResolvedValueOnce(null);
 
       // when & then
       await expect(
-        simulationService.updateSimulation(id, { status: "confirmed" }),
+        simulationService.updateSimulation(id, userId, { status: "confirmed" }),
       ).rejects.toMatchObject({
         code: "SIMULATION_NOT_FOUND",
         statusCode: 404,
@@ -739,9 +740,10 @@ describe("SimulationService", () => {
     it("허용되지 않는 status 값으로 수정 시 INVALID_STATUS 예외 발생", async () => {
       // given
       const id = 1;
+      const userId = 1;
       const existing = {
         id,
-        userId: 1,
+        userId,
         type: "ISA" as const,
         version: 1,
         status: "draft",
@@ -756,7 +758,7 @@ describe("SimulationService", () => {
 
       // when & then
       await expect(
-        simulationService.updateSimulation(id, { status: "잘못된값" }),
+        simulationService.updateSimulation(id, userId, { status: "잘못된값" }),
       ).rejects.toMatchObject({
         code: "INVALID_STATUS",
         statusCode: 400,
@@ -768,10 +770,11 @@ describe("SimulationService", () => {
     it("해피패스: 시뮬레이션 status를 수정", async () => {
       // given
       const id = 1;
+      const userId = 1;
       const data = { status: "confirmed" };
       const existing = {
         id,
-        userId: 1,
+        userId,
         type: "ISA" as const,
         version: 1,
         status: "draft",
@@ -797,14 +800,14 @@ describe("SimulationService", () => {
       );
 
       // when
-      const result = await simulationService.updateSimulation(id, data);
+      const result = await simulationService.updateSimulation(id, userId, data);
 
       // then
       expect(mockSimulationRepo.update).toHaveBeenCalledWith(id, data);
       expect(result).toEqual(updatedResult);
     });
 
-    it("보안 버그: updateSimulation은 소유권을 검증하지 않아 다른 유저의 시뮬레이션도 수정 가능함(현재 동작 문서화)", async () => {
+    it("에지케이스: 다른 유저의 시뮬레이션을 수정하면 SIMULATION_FORBIDDEN 예외 발생", async () => {
       // given: id=1인 시뮬레이션은 userId=1 소유
       const id = 1;
       const data = { status: "confirmed" };
@@ -818,25 +821,19 @@ describe("SimulationService", () => {
         outputData: {},
         createdAt: new Date(),
       };
-      const updatedResult = { ...existing, status: "confirmed" };
 
       (mockSimulationRepo.findById as jest.Mock).mockResolvedValueOnce(
         existing,
       );
-      (mockSimulationRepo.update as jest.Mock).mockResolvedValueOnce(
-        updatedResult,
-      );
 
-      // when: 서비스 시그니처는 userId를 받지 않기 때문에
-      // 다른 유저(예: userId=2)라도 ID만 알면 update가 성공한다.
-      // 이 테스트는 소유권 검증 부재 버그를 문서화한다.
-      const result = await simulationService.updateSimulation(id, data);
-
-      // then: update가 그대로 호출되고 성공한다 (FORBIDDEN이 던져지지 않음)
-      expect(mockSimulationRepo.update).toHaveBeenCalledWith(id, data);
-      expect(result).toEqual(updatedResult);
-      // TODO(security): updateSimulation에 userId 인자를 추가하고 소유권 검증을 넣어야 함.
-      // 수정 시 이 테스트는 FORBIDDEN 예외를 기대하도록 변경 필요.
+      // when & then: userId=2가 수정 시도
+      await expect(
+        simulationService.updateSimulation(id, 2, data),
+      ).rejects.toMatchObject({
+        code: "SIMULATION_FORBIDDEN",
+        statusCode: 403,
+      });
+      expect(mockSimulationRepo.update).not.toHaveBeenCalled();
     });
   });
 
