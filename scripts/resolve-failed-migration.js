@@ -45,6 +45,17 @@ async function columnExists(columnName) {
   return rows.length > 0;
 }
 
+async function migrationsTableExists() {
+  const { rows } = await pool.query(
+    `SELECT 1
+     FROM information_schema.tables
+     WHERE table_schema = 'public'
+       AND table_name = '_prisma_migrations'
+     LIMIT 1`,
+  );
+  return rows.length > 0;
+}
+
 function isDnsError(error) {
   const message = error instanceof Error ? error.message : String(error);
   return (
@@ -55,6 +66,14 @@ function isDnsError(error) {
 }
 
 try {
+  // 스키마 초기화 직후: 테이블이 없으면 migrate deploy가 전부 적용
+  if (!(await migrationsTableExists())) {
+    console.log(
+      "[resolve] _prisma_migrations missing (fresh DB) — skip for migrate deploy",
+    );
+    process.exit(0);
+  }
+
   // 실패 레코드가 있을 때만 복구 — 매 배포마다 성공 레코드를 지우지 않음
   const failed = await pool.query(
     `SELECT migration_name, finished_at, rolled_back_at, logs
@@ -69,7 +88,9 @@ try {
     process.exit(0);
   }
 
-  console.log(`[resolve] found failed record for ${MIGRATION_NAME} — recovering`);
+  console.log(
+    `[resolve] found failed record for ${MIGRATION_NAME} — recovering`,
+  );
 
   const deleted = await pool.query(
     `DELETE FROM "_prisma_migrations" WHERE migration_name = $1 AND finished_at IS NULL`,
