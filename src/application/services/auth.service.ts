@@ -3,6 +3,7 @@ import type { IHashUtil } from "../../shared/contracts/hash-util.contract.js";
 import type { IJwtUtil } from "../../shared/contracts/jwt-util.contract.js";
 import type { IGoogleTokenVerifier } from "../../shared/contracts/google-token-verifier.contract.js";
 import { BusinessException } from "../../shared/exceptions/business.exception.js";
+import { createAuthTokenPayload } from "../../shared/session-policy.js";
 
 export interface AuthResult {
   id: number;
@@ -38,8 +39,10 @@ export const createAuthService = (
     // 사용자 생성
     const user = await userRepo.create(email, hashedPassword, name);
 
-    // JWT 토큰 발급
-    const token = jwtUtil.sign({ userId: user.id, email: user.email });
+    // JWT 토큰 발급 (유휴 30분, sessionStartedAt으로 절대 12시간 추적)
+    const token = jwtUtil.sign(
+      createAuthTokenPayload(user.id, user.email),
+    );
 
     return {
       id: user.id,
@@ -65,8 +68,10 @@ export const createAuthService = (
       );
     }
 
-    // JWT 토큰 발급
-    const token = jwtUtil.sign({ userId: user.id, email: user.email });
+    // JWT 토큰 발급 (유휴 30분, sessionStartedAt으로 절대 12시간 추적)
+    const token = jwtUtil.sign(
+      createAuthTokenPayload(user.id, user.email),
+    );
 
     return {
       id: user.id,
@@ -83,10 +88,9 @@ export const createAuthService = (
     // googleSub로 기존 사용자 조회
     const byGoogle = await userRepo.findByGoogleSub(identity.googleSub);
     if (byGoogle) {
-      const token = jwtUtil.sign({
-        userId: byGoogle.id,
-        email: byGoogle.email,
-      });
+      const token = jwtUtil.sign(
+        createAuthTokenPayload(byGoogle.id, byGoogle.email),
+      );
       return {
         id: byGoogle.id,
         email: byGoogle.email,
@@ -124,10 +128,9 @@ export const createAuthService = (
       profileImage: identity.profileImage,
     });
 
-    const token = jwtUtil.sign({
-      userId: created.id,
-      email: created.email,
-    });
+    const token = jwtUtil.sign(
+      createAuthTokenPayload(created.id, created.email),
+    );
     return {
       id: created.id,
       email: created.email,
@@ -166,7 +169,9 @@ export const createAuthService = (
 
     // 이미 이 계정에 동일 googleSub가 있으면 바로 로그인
     if (user.googleSub === identity.googleSub) {
-      const token = jwtUtil.sign({ userId: user.id, email: user.email });
+      const token = jwtUtil.sign(
+        createAuthTokenPayload(user.id, user.email),
+      );
       return {
         id: user.id,
         email: user.email,
@@ -199,7 +204,9 @@ export const createAuthService = (
       profileImage: identity.profileImage,
     });
 
-    const token = jwtUtil.sign({ userId: user.id, email: user.email });
+    const token = jwtUtil.sign(
+      createAuthTokenPayload(user.id, user.email),
+    );
     return {
       id: user.id,
       email: user.email,
