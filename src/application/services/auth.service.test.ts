@@ -298,6 +298,31 @@ describe("AuthService", () => {
       expect(mockUserRepo.createGoogleUser).not.toHaveBeenCalled();
     });
 
+    it("이메일에 동일 googleSub가 이미 있으면 비밀번호 없이 로그인", async () => {
+      (mockGoogleVerifier.verifyIdToken as jest.Mock).mockResolvedValueOnce(
+        identity,
+      );
+      (mockUserRepo.findByGoogleSub as jest.Mock).mockResolvedValueOnce(null);
+      (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce({
+        id: 5,
+        email: identity.email,
+        password: "hashed",
+        name: "기존유저",
+        googleSub: identity.googleSub,
+        profileImage: null,
+      });
+
+      const result = await authService.googleSignIn(idToken);
+
+      expect(result).toMatchObject({
+        id: 5,
+        email: identity.email,
+        name: "기존유저",
+      });
+      expect(mockUserRepo.update).not.toHaveBeenCalled();
+      expect(mockJwtUtil.sign).toHaveBeenCalled();
+    });
+
     it("유효하지 않은 Google 토큰이면 INVALID_GOOGLE_TOKEN 예외 발생", async () => {
       // given
       (mockGoogleVerifier.verifyIdToken as jest.Mock).mockRejectedValueOnce(

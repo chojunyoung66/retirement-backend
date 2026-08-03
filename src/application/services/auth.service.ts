@@ -99,9 +99,32 @@ export const createAuthService = (
       };
     }
 
-    // 동일 이메일의 기존 계정이 있으면 비밀번호 재인증 연결 필요
+    // 동일 이메일의 기존 계정 처리
     const byEmail = await userRepo.findByEmail(identity.email);
     if (byEmail && identity.emailVerified) {
+      // 이미 이 계정에 동일 Google이 연결돼 있으면 바로 로그인 (재확인 불필요)
+      if (byEmail.googleSub === identity.googleSub) {
+        const token = jwtUtil.sign(
+          createAuthTokenPayload(byEmail.id, byEmail.email),
+        );
+        return {
+          id: byEmail.id,
+          email: byEmail.email,
+          name: byEmail.name,
+          token,
+        };
+      }
+
+      // 다른 Google이 이미 연결됨
+      if (byEmail.googleSub) {
+        throw new BusinessException(
+          "GOOGLE_ACCOUNT_IN_USE",
+          "이미 다른 Google 계정이 연결되어 있습니다",
+          409,
+        );
+      }
+
+      // googleSub 미연결 — 최초 1회만 비밀번호 재인증 필요
       throw new BusinessException(
         "ACCOUNT_LINK_REQUIRED",
         "이미 가입된 이메일입니다. 비밀번호 확인 후 Google 계정을 연결해 주세요",
