@@ -85,7 +85,7 @@ export const createUserService = (
         throw new BusinessException(
           "INVALID_CREDENTIALS",
           "현재 비밀번호가 올바르지 않습니다",
-          401,
+          400,
         );
       }
 
@@ -130,8 +130,8 @@ export const createUserService = (
       if (!ok) {
         throw new BusinessException(
           "INVALID_CREDENTIALS",
-          "이메일 또는 비밀번호가 올바르지 않습니다",
-          401,
+          "비밀번호가 올바르지 않습니다",
+          400,
         );
       }
     } else {

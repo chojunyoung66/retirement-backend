@@ -168,7 +168,7 @@ describe("UserService", () => {
         }),
       ).rejects.toMatchObject({
         code: "INVALID_CREDENTIALS",
-        statusCode: 401,
+        statusCode: 400,
       });
 
       expect(mockHashUtil.hash).not.toHaveBeenCalled();
@@ -275,7 +275,7 @@ describe("UserService", () => {
         userService.deleteAccount(1, { password: "wrong" }),
       ).rejects.toMatchObject({
         code: "INVALID_CREDENTIALS",
-        statusCode: 401,
+        statusCode: 400,
       });
       expect(mockUserRepo.deleteById).not.toHaveBeenCalled();
     });
