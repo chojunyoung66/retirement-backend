@@ -82,6 +82,14 @@ describe("UserService", () => {
       };
 
       (mockUserRepo.update as jest.Mock).mockResolvedValueOnce(updatedUser);
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: userId,
+        email: "test@example.com",
+        password: "hashed",
+        name: newName,
+        googleSub: null,
+        profileImage: null,
+      });
 
       // when
       const result = await userService.updateProfile(userId, { name: newName });
@@ -99,36 +107,98 @@ describe("UserService", () => {
       ]);
     });
 
-    it("해피패스: 사용자 비밀번호를 업데이트", async () => {
+    it("해피패스: 현재 비밀번호 확인 후 새 비밀번호를 해시해 업데이트", async () => {
       // given
       const userId = 1;
       const newPassword = "newpassword123";
+      const hashedNew = "hashed-new-password";
       const updatedUser = {
         id: userId,
         email: "test@example.com",
         name: "테스트유저",
       };
 
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: userId,
+        email: "test@example.com",
+        password: "hashed-old",
+        name: "테스트유저",
+        googleSub: null,
+        profileImage: null,
+      });
+      (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(true);
+      (mockHashUtil.hash as jest.Mock).mockResolvedValueOnce(hashedNew);
       (mockUserRepo.update as jest.Mock).mockResolvedValueOnce(updatedUser);
 
       // when
       const result = await userService.updateProfile(userId, {
         password: newPassword,
+        currentPassword: "oldpassword12",
       });
 
       // then
+      expect(mockHashUtil.compare).toHaveBeenCalledWith(
+        "oldpassword12",
+        "hashed-old",
+      );
+      expect(mockHashUtil.hash).toHaveBeenCalledWith(newPassword);
       expect(mockUserRepo.update).toHaveBeenCalledWith(userId, {
-        password: newPassword,
+        password: hashedNew,
       });
       expect(result).toEqual({ ...updatedUser, hasPassword: true });
-      // 반환 DTO에 password 필드가 없어야 함 (보안)
       expect(result).not.toHaveProperty("password");
-      expect(Object.keys(result).sort()).toEqual([
-        "email",
-        "hasPassword",
-        "id",
-        "name",
-      ]);
+    });
+
+    it("현재 비밀번호가 틀리면 INVALID_CREDENTIALS이고 update를 호출하지 않는다", async () => {
+      const userId = 1;
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: userId,
+        email: "test@example.com",
+        password: "hashed-old",
+        name: "테스트유저",
+        googleSub: null,
+        profileImage: null,
+      });
+      (mockHashUtil.compare as jest.Mock).mockResolvedValueOnce(false);
+
+      await expect(
+        userService.updateProfile(userId, {
+          password: "newpassword123",
+          currentPassword: "wrong-password",
+        }),
+      ).rejects.toMatchObject({
+        code: "INVALID_CREDENTIALS",
+        statusCode: 401,
+      });
+
+      expect(mockHashUtil.hash).not.toHaveBeenCalled();
+      expect(mockUserRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("Google-only 계정은 이 API로 비밀번호를 설정할 수 없다", async () => {
+      const userId = 2;
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: userId,
+        email: "google@example.com",
+        password: null,
+        name: "구글유저",
+        googleSub: "sub-1",
+        profileImage: null,
+      });
+
+      await expect(
+        userService.updateProfile(userId, {
+          password: "newpassword123",
+          currentPassword: "anything",
+        }),
+      ).rejects.toMatchObject({
+        code: "PASSWORD_NOT_SET",
+        statusCode: 400,
+      });
+
+      expect(mockHashUtil.compare).not.toHaveBeenCalled();
+      expect(mockHashUtil.hash).not.toHaveBeenCalled();
+      expect(mockUserRepo.update).not.toHaveBeenCalled();
     });
 
     it("업데이트할 필드가 없을 때({}) INVALID_UPDATE 예외 발생", async () => {

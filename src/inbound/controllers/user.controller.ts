@@ -1,7 +1,10 @@
 import { Router, Request, Response, NextFunction } from "express";
 import type { UserServiceType } from "../../application/services/user.service.js";
 import { BusinessException } from "../../shared/exceptions/business.exception.js";
-import { deleteAccountDataSchema } from "../schemas/user.schemas.js";
+import {
+  deleteAccountDataSchema,
+  updateProfileDataSchema,
+} from "../schemas/user.schemas.js";
 import { clearAuthCookie } from "../utils/auth-cookie.js";
 
 export const createUserController = (userService: UserServiceType) => {
@@ -36,17 +39,19 @@ export const createUserController = (userService: UserServiceType) => {
         throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
       }
 
-      const { name, password } = req.body;
-
-      if (!name && !password) {
-        throw new BusinessException("INVALID_REQUEST", "변경할 필드가 없습니다", 400);
+      const validation = updateProfileDataSchema.safeParse(req.body ?? {});
+      if (!validation.success) {
+        const message = validation.error.issues
+          .map((issue) => issue.message)
+          .join(", ");
+        throw new BusinessException(
+          "INVALID_REQUEST",
+          message || "변경할 필드가 없습니다",
+          400,
+        );
       }
 
-      const updateData: Record<string, string> = {};
-      if (name) updateData.name = name;
-      if (password) updateData.password = password;
-
-      const updated = await userService.updateProfile(userId, updateData);
+      const updated = await userService.updateProfile(userId, validation.data);
 
       res.status(200).json({
         success: true,
