@@ -9,7 +9,7 @@ describe("DiagnosisService", () => {
   let mockDiagnosisRepo: Partial<IDiagnosisRepo>;
 
   const diagnosisData: DiagnosisData = {
-    householdType: "single",
+    householdType: "individual",
     birthYear: 1980,
     retirementYear: 2045,
     nationalPension: 900000,

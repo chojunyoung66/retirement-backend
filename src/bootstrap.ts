@@ -66,6 +66,14 @@ const apiLimiter = rateLimit({
   },
 });
 
+// 헬스체크 스캔·남용 완화 (API보다 여유)
+const healthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const createApp = () => {
   const app = express();
 
@@ -88,7 +96,8 @@ export const createApp = () => {
     }),
   );
   app.use(cookieParser());
-  app.use(express.json());
+  // JSON body 상한 — 기본값보다 명시적으로 제한
+  app.use(express.json({ limit: "64kb" }));
   app.use("/api", apiLimiter);
 
   // Utils 생성
@@ -131,7 +140,7 @@ export const createApp = () => {
   const diagnosisController = createDiagnosisController(diagnosisService);
 
   // Public routes (인증 불필요)
-  app.use("/health", healthRouter);
+  app.use("/health", healthLimiter, healthRouter);
   app.use("/api/auth", authLimiter, authController.router);
 
   // Protected routes (인증 필요)
