@@ -10,15 +10,21 @@ import {
 import { AUTH_COOKIE_NAME, setAuthCookie } from "../utils/auth-cookie.js";
 
 function extractToken(req: Request): string | null {
-  // Bearer 우선 — 기존 클라이언트·테스트 호환
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) {
-    return authHeader.substring(7);
-  }
-  // HttpOnly 쿠키 (크로스오리진 withCredentials)
+  // HttpOnly 쿠키 우선 — 브라우저 세션의 단일 출처
   const cookieToken = req.cookies?.[AUTH_COOKIE_NAME];
   if (typeof cookieToken === "string" && cookieToken.length > 0) {
     return cookieToken;
+  }
+
+  // production에서는 Bearer 무시 (XSS로 Authorization 주입 경로 차단)
+  if (process.env.NODE_ENV === "production") {
+    return null;
+  }
+
+  // 테스트·로컬 도구 호환용 Bearer
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.substring(7);
   }
   return null;
 }
