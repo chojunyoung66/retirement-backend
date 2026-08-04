@@ -3,7 +3,7 @@
 은퇴 재무 시뮬레이션 백엔드 API 서버입니다.
 국민연금, 건강보험, 퇴직금, 실업급여 등 노후 대비에 필요한 금융 계산 기능을 제공합니다.
 
-- **배포 서버:** https://retirement-backend-1.onrender.com
+- **배포 서버:** https://retirement-backend-ph7y.onrender.com
 
 ## 기술 스택
 

@@ -2,7 +2,7 @@
 
 > 갱신: 2026-08-04 · **현 미션 마감 핸드오프**  
 > **정본:** `retirement-frontend/docs/feature-design-flow.md`  
-> 보안 라운드: [security-quality-audit.md](./security-quality-audit.md)
+> 보안 감사 상세 표는 레포 외부(Drive 등) 보관
 
 이 파일은 BE 작업 시 찾기 쉬운 포인터다. 흐름·도메인·다음 미션(지표·로그) 계측점은 FE 정본 §3~§8을 본다.
 
