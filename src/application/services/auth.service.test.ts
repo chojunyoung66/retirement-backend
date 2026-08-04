@@ -79,7 +79,7 @@ describe("AuthService", () => {
       });
     });
 
-    it("이미 존재하는 이메일로 가입 시도 시 DUPLICATE_EMAIL 예외 발생", async () => {
+    it("이미 존재하는 이메일이면 REGISTRATION_UNAVAILABLE (열거 방지)", async () => {
       // given
       const email = "existing@example.com";
       const password = "password123";
@@ -98,15 +98,16 @@ describe("AuthService", () => {
       await expect(
         authService.signup(email, password, name),
       ).rejects.toMatchObject({
-        code: "DUPLICATE_EMAIL",
+        code: "REGISTRATION_UNAVAILABLE",
         statusCode: 409,
       });
 
-      // 중복 검사 후 create가 호출되지 않아야 함
+      // 타이밍 균일화: 존재해도 해시는 수행, create는 하지 않음
+      expect(mockHashUtil.hash).toHaveBeenCalledWith(password);
       expect(mockUserRepo.create).not.toHaveBeenCalled();
     });
 
-    it("Google-only 이메일이면 GOOGLE_ONLY_ACCOUNT로 안내", async () => {
+    it("Google-only 이메일도 REGISTRATION_UNAVAILABLE로 통일", async () => {
       (mockUserRepo.findByEmail as jest.Mock).mockResolvedValueOnce({
         id: 2,
         email: "google@example.com",
@@ -119,9 +120,10 @@ describe("AuthService", () => {
       await expect(
         authService.signup("google@example.com", "password123", "새이름"),
       ).rejects.toMatchObject({
-        code: "GOOGLE_ONLY_ACCOUNT",
+        code: "REGISTRATION_UNAVAILABLE",
         statusCode: 409,
       });
+      expect(mockHashUtil.hash).toHaveBeenCalledWith("password123");
       expect(mockUserRepo.create).not.toHaveBeenCalled();
     });
   });

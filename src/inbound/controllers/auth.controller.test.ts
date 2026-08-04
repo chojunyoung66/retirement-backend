@@ -237,8 +237,8 @@ describe("AuthController", () => {
       };
 
       const duplicateError = new BusinessException(
-        "DUPLICATE_EMAIL",
-        "이미 존재하는 이메일입니다",
+        "REGISTRATION_UNAVAILABLE",
+        "이 이메일로는 새로 가입할 수 없습니다. 이미 계정이 있다면 로그인해 주세요",
         409
       );
 
@@ -250,7 +250,7 @@ describe("AuthController", () => {
       // then
       expect(response.status).toBe(409);
       expect(response.body.success).toBe(false);
-      expect(response.body.error.code).toBe("DUPLICATE_EMAIL");
+      expect(response.body.error.code).toBe("REGISTRATION_UNAVAILABLE");
     });
   });
 

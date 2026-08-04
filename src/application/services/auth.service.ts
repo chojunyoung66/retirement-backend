@@ -25,25 +25,18 @@ export const createAuthService = (
   ): Promise<AuthResult> {
     // 기존 사용자 중복 확인
     const existingUser = await userRepo.findByEmail(email);
-    if (existingUser) {
-      // Google-only 계정 — 이메일 가입 대신 Google 로그인 안내
-      if (!existingUser.password && existingUser.googleSub) {
-        throw new BusinessException(
-          "GOOGLE_ONLY_ACCOUNT",
-          "이 이메일은 Google로 가입된 계정입니다. Google 로그인으로 이용해 주세요",
-          409,
-        );
-      }
 
+    // 비밀번호 해싱 (존재 여부와 무관 — 타이밍·열거 완화)
+    const hashedPassword = await hashUtil.hash(password);
+
+    // 이미 가입된 이메일은 단일 응답으로 통일 (방식·존재 여부 비공개)
+    if (existingUser) {
       throw new BusinessException(
-        "DUPLICATE_EMAIL",
-        "이미 존재하는 이메일입니다",
+        "REGISTRATION_UNAVAILABLE",
+        "이 이메일로는 새로 가입할 수 없습니다. 이미 계정이 있다면 로그인해 주세요",
         409,
       );
     }
-
-    // 비밀번호 해싱
-    const hashedPassword = await hashUtil.hash(password);
 
     // 사용자 생성
     const user = await userRepo.create(email, hashedPassword, name);
