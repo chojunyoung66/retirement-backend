@@ -2,6 +2,7 @@
 
 > 갱신: 2026-08-04 · **보안 고도화 라운드 종료**  
 > **정본:** `retirement-frontend/docs/security-quality-audit.md`  
+> 기능·흐름 핸드오프: [feature-design-flow.md](./feature-design-flow.md)  
 > 이 파일은 백엔드 작업 시 찾기 쉽도록 둔 요약·포인터입니다.
 
 ## 라운드 결론
