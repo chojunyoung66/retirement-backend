@@ -1,9 +1,11 @@
 # retirement-backend
 
-은퇴 재무 시뮬레이션 백엔드 API 서버입니다.
-국민연금, 건강보험, 퇴직금, 실업급여 등 노후 대비에 필요한 금융 계산 기능을 제공합니다.
+은퇴 재무 시뮬레이션 API 서버입니다.
+인증·진단 저장·시뮬레이션(국민연금·건강보험·퇴직금·실업급여·ISA·IRP·주택연금)·연금 포트폴리오를 제공합니다.
 
-- **배포 서버:** https://retirement-backend-ph7y.onrender.com
+- **배포:** https://retirement-backend-ph7y.onrender.com
+- **프론트:** https://retirement-frontend-y2dn.vercel.app
+- **흐름 정의서:** [`docs/feature-design-flow.md`](docs/feature-design-flow.md) (정본은 FE 레포 동명 문서)
 
 ## 기술 스택
 
@@ -11,83 +13,83 @@
 |------|------|
 | Runtime | Node.js + TypeScript |
 | Framework | Express.js 5 |
-| Database | PostgreSQL + Prisma ORM |
-| Auth | JWT (jsonwebtoken) |
-| Validation | Zod |
+| Database | PostgreSQL + Prisma 7 |
+| Auth | JWT · HttpOnly 쿠키 · Google ID Token |
+| Security | helmet · CORS credentials · rate-limit · Zod |
 | Testing | Jest + Supertest |
+| Deploy | Render (`render.yaml`) |
 
 ## 프로젝트 구조
-클린 아키텍쳐 구조
+
+클린 아키텍처. 의존성은 `src/bootstrap.ts`에서 조립합니다.
+
 ```
 src/
 ├── application/
-│   ├── contracts/       # 서비스 인터페이스
-│   ├── domain/          # 엔티티 정의
-│   └── services/        # 비즈니스 로직 + 테스트
+│   ├── contracts/     # 서비스 인터페이스
+│   ├── domain/        # 엔티티
+│   └── services/      # 비즈니스 로직 + *.test.ts
 ├── inbound/
-│   ├── controllers/     # 라우트 핸들러
-│   ├── middlewares/     # 인증·에러 처리
-│   ├── routers/         # 라우트 정의
-│   └── schemas/         # Zod 유효성 검사
-├── outbound/
-│   └── repos/           # Prisma 레포지토리
+│   ├── controllers/   # 라우트 핸들러
+│   ├── middlewares/   # 인증·에러
+│   ├── routers/       # health
+│   └── schemas/       # Zod
+├── outbound/repos/    # Prisma 구현
 └── shared/
-    ├── contracts/       # 유틸 인터페이스
-    ├── exceptions/      # 커스텀 예외 클래스
-    └── utils/           # JWT·bcrypt 유틸
+    ├── contracts/ · exceptions/ · utils/ · session-policy.ts
 ```
+
+의존성 흐름: `Controller → Service → Repository`
 
 ## API 엔드포인트
 
-### 인증 (공개)
-| Method | Path | 설명 |
-|--------|------|------|
-| POST | `/api/auth/signup` | 회원가입 |
-| POST | `/api/auth/signin` | 로그인 |
+베이스 경로 `/api` (헬스체크만 예외).
 
-### 사용자 (인증 필요)
+### 인증
+| Method | Path | 인증 | 설명 |
+|--------|------|------|------|
+| POST | `/api/auth/signup` | 공개 | 이메일 가입 |
+| POST | `/api/auth/signin` | 공개 | 이메일 로그인 |
+| POST | `/api/auth/google` | 공개 | Google ID 토큰 로그인 |
+| POST | `/api/auth/google/link` | 공개 | 기존 계정 Google 연동 (비밀번호 재인증) |
+| POST | `/api/auth/logout` | 공개 | 쿠키 제거 |
+| GET | `/api/auth/me` | 필요 | 세션 프로필 |
+
+성공 시 HttpOnly 쿠키 `retirement_token` (`Path=/api`, SameSite=Lax) 발급.
+프로덕션에서는 Bearer 헤더를 무시하고 쿠키만 신뢰합니다.
+
+### 사용자
 | Method | Path | 설명 |
 |--------|------|------|
-| GET | `/api/users/me` | 프로필 조회 |
+| GET | `/api/users/me` | 프로필 |
 | PATCH | `/api/users/me` | 프로필·비밀번호 수정 |
+| DELETE | `/api/users/me` | 탈퇴 (재인증 · hard delete + cascade) |
 
-### 은퇴 목표 (인증 필요)
+### 진단 (유저당 1건)
 | Method | Path | 설명 |
 |--------|------|------|
-| POST | `/api/retirement-goals` | 목표 생성 |
-| GET | `/api/retirement-goals/me` | 내 목표 조회 |
-| PATCH | `/api/retirement-goals/me` | 목표 수정 |
+| GET | `/api/diagnoses/me/latest` | 최신 진단 |
+| PUT | `/api/diagnoses/me/latest` | upsert (은퇴 수입 금액은 서버에서 0 sanitize) |
+| DELETE | `/api/diagnoses/me/latest` | 삭제 |
 
-### 시뮬레이션 (인증 필요)
+> 별도 retirement-goals API는 없습니다. 진단이 목표·현금흐름 입력을 담당합니다.
+
+### 시뮬레이션
 | Method | Path | 설명 |
 |--------|------|------|
-| POST | `/api/simulations/national-pension` | 국민연금 계산 |
-| GET | `/api/simulations/national-pension/latest` | 최근 결과 조회 |
-| POST | `/api/simulations/health-insurance` | 건강보험료 계산 |
-| GET | `/api/simulations/health-insurance/latest` | 최근 결과 조회 |
-| POST | `/api/simulations/severance-pay` | 퇴직금 계산 |
-| GET | `/api/simulations/severance-pay/latest` | 최근 결과 조회 |
-| POST | `/api/simulations/unemployment-benefit` | 실업급여 계산 |
-| GET | `/api/simulations/unemployment-benefit/latest` | 최근 결과 조회 |
-| POST | `/api/simulations/isa` | ISA 시뮬레이션 |
-| GET | `/api/simulations/isa/latest` | 최근 결과 조회 |
-| POST | `/api/simulations/irp` | IRP 시뮬레이션 |
-| GET | `/api/simulations/irp/latest` | 최근 결과 조회 |
-| PATCH | `/api/simulations/:id` | 시뮬레이션 상태 수정 (`draft` \| `confirmed`) |
+| POST/GET | `/api/simulations/{type}` · `.../latest` | type: `national-pension`, `health-insurance`, `severance-pay`, `unemployment-benefit`, `isa`, `irp`, `housing-pension` |
+| GET/PATCH/DELETE | `/api/simulations/:id` | 조회 · 상태(`draft`\|`confirmed`) · 삭제 |
 
-### 연금 포트폴리오 (인증 필요)
+### 연금 포트폴리오
 | Method | Path | 설명 |
 |--------|------|------|
-| POST | `/api/pension-portfolios` | 포트폴리오 생성 |
-| GET | `/api/pension-portfolios` | 목록 조회 |
-| GET | `/api/pension-portfolios/:id` | 상세 조회 |
-| PATCH | `/api/pension-portfolios/:id` | 수정 |
-| DELETE | `/api/pension-portfolios/:id` | 삭제 |
+| POST/GET | `/api/pension-portfolios` | 생성 · 목록 |
+| GET/PATCH/DELETE | `/api/pension-portfolios/:id` | 상세 · 수정 · 삭제 |
 
-### 헬스체크 (공개)
+### 헬스체크
 | Method | Path | 설명 |
 |--------|------|------|
-| GET | `/health` | 서버 상태 확인 |
+| GET | `/health` | 서버 상태 (FE 콜드스타트 워밍용) |
 
 ## 시작하기
 
@@ -97,96 +99,56 @@ src/
 
 ### 환경 변수
 
-`.env` 파일을 생성하고 아래 값을 설정합니다.
-
-`.env.example`을 참고하여 `.env` 파일을 생성합니다.
+`.env.example` 참고:
 
 ```env
 DATABASE_URL="postgresql://USER@localhost:5432/DB_NAME?schema=public"
-JWT_SECRET="충분히 긴 랜덤 문자열"
+JWT_SECRET=""          # crypto.randomBytes(64).toString('hex')
 PORT=3000
 NODE_ENV=development
-```
-
-JWT_SECRET 생성:
-```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+GOOGLE_CLIENT_ID=""    # FE VITE_GOOGLE_CLIENT_ID와 동일
+FRONTEND_ORIGIN="http://localhost:5173"  # production 필수 · credentials CORS
 ```
 
 ### 설치 및 실행
 
 ```bash
-# 의존성 설치
 npm install
-
-# DB 마이그레이션
 npx prisma migrate deploy
-
-# 개발 서버 (핫 리로드)
-npm run dev
-
-# 프로덕션 빌드 및 실행
-npm run build
-npm start
+npm run dev          # tsx watch
+npm run build && npm start
 ```
 
 ### 스크립트
 
-```bash
-npm run dev      # 개발 서버 (tsx watch)
-npm run build    # TypeScript 컴파일
-npm start        # 프로덕션 실행
-npm run test     # 테스트 실행
-npm run type     # 타입 검사
-npm run lint     # ESLint 검사
-npm run format   # Prettier 포맷팅
-```
+| 명령 | 설명 |
+|------|------|
+| `npm run dev` | 개발 서버 |
+| `npm run build` | TypeScript 컴파일 |
+| `npm start` | migrate deploy + 프로덕션 실행 |
+| `npm run test` | Jest |
+| `npm run type` | 타입 검사 |
+| `npm run lint` / `format` | ESLint / Prettier |
 
-## 요청/응답 형식
+## 요청/응답
 
-### 공통 응답 구조
 ```json
-// 성공
-{ "success": true, "data": { ... } }
-
-// 실패
+{ "success": true, "data": { } }
 { "success": false, "error": { "code": "ERROR_CODE", "message": "설명" } }
 ```
 
-### 인증
+쿠키 세션이 기본입니다. 로컬·레거시 호환을 위해 개발 환경에서만 Bearer도 동작할 수 있습니다.
+
 ```http
-POST /api/auth/signup
-{ "email": "user@example.com", "password": "12345678", "name": "홍길동" }
-→ { "success": true, "data": { "token": "eyJ..." } }
-
-POST /api/auth/signin
-{ "email": "user@example.com", "password": "12345678" }
-→ { "success": true, "data": { "token": "eyJ..." } }
+Cookie: retirement_token=eyJ...
 ```
 
-인증이 필요한 API는 요청 헤더에 토큰을 포함합니다.
-```http
-Authorization: Bearer eyJ...
-```
+## 아키텍처 · 보안 요약
 
-### 시뮬레이션 예시 (IRP)
-```http
-POST /api/simulations/irp
-{ "annualContribution": 9000000, "expectedReturnRate": 5, "investmentYears": 20, "annualIncome": 50000000 }
-→ { "success": true, "data": { "id": 1, "outputData": { "expectedBalance": ..., "annualTaxCredit": ..., "totalTaxCredit": ..., "notice": "..." } } }
-```
-
-전체 에러 코드 및 테스트 결과는 [`docs/api-test-results.md`](docs/api-test-results.md)를 참고하세요.
-
-## 아키텍처
-
-클린 아키텍처 기반으로 계층을 분리합니다.
-
-```
-Controller → Service → Repository
-```
-
-- **의존성 주입**: 팩토리 함수 방식으로 모든 의존성을 `bootstrap.ts`에서 조립
-- **예외 처리**: `BusinessException`(도메인 오류)·`TechnicException`(기술 오류) 구분
-- **인증**: JWT 미들웨어로 보호된 라우트 일괄 처리
-- **테스트**: TDD 방식, 서비스 코드와 테스트 파일 동일 위치 배치
+- **DI:** `bootstrap.ts`에서 utils → repos → services → controllers 조립 (`index.ts` 기동)
+- **예외:** `BusinessException` / `TechnicalException`
+- **세션:** idle 30분 슬라이딩 · absolute 12시간
+- **Rate limit (15분):** auth 20 · api 300 · health 120
+- **CORS:** production에서 `FRONTEND_ORIGIN` fail-closed · credentials 필수
+- **소유권:** Simulation · Portfolio · Diagnosis `/me` 스코프
+- **테스트:** TDD · 서비스와 동일 디렉터리 `*.test.ts`
