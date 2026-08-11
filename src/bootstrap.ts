@@ -37,11 +37,26 @@ import { createGoogleTokenVerifier } from "./shared/utils/google-token-verifier.
 import { healthRouter } from "./inbound/routers/health.router.js";
 
 // 인증 엔드포인트는 브루트포스·크리덴셜 스터핑 방지를 위해 더 엄격한 요청 한도 적용
+// GET /me·POST /logout은 세션 확인용이라 제외 (로컬 HMR/Strict Mode에 쉽게 소진됨)
+const isDev = process.env.NODE_ENV !== "production";
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 20,
+  limit: isDev ? 300 : 40,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    const path = req.path;
+    if (req.method === "GET" && (path === "/me" || path.endsWith("/auth/me"))) {
+      return true;
+    }
+    if (
+      req.method === "POST" &&
+      (path === "/logout" || path.endsWith("/auth/logout"))
+    ) {
+      return true;
+    }
+    return false;
+  },
   message: {
     success: false,
     error: {
@@ -54,7 +69,7 @@ const authLimiter = rateLimit({
 // 전체 API에 대한 기본 요청 한도 (남용·DoS성 트래픽 완화)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 300,
+  limit: isDev ? 2000 : 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
