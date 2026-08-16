@@ -1,7 +1,10 @@
 export interface DiagnosisData {
   householdType: string;
+  householdSize: number;
   birthYear: number;
   retirementYear: number;
+  spouseBirthYear: number | null;
+  spouseRetirementYear: number | null;
   nationalPension: number;
   retirementPension: number;
   personalPension: number;

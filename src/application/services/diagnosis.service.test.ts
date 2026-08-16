@@ -10,8 +10,11 @@ describe("DiagnosisService", () => {
 
   const diagnosisData: DiagnosisData = {
     householdType: "individual",
+    householdSize: 1,
     birthYear: 1980,
     retirementYear: 2045,
+    spouseBirthYear: null,
+    spouseRetirementYear: null,
     nationalPension: 900000,
     retirementPension: 500000,
     personalPension: 300000,
@@ -94,6 +97,43 @@ describe("DiagnosisService", () => {
         housingPension: 0,
       });
       expect(result).toEqual(saved);
+    });
+
+    it("해피패스: 부부 진단 시 배우자 연도·가구원 수를 보존", async () => {
+      // given
+      const userId = 2;
+      const coupleData: DiagnosisData = {
+        ...diagnosisData,
+        householdType: "couple",
+        householdSize: 2,
+        spouseBirthYear: 1982,
+        spouseRetirementYear: 2047,
+      };
+      const saved = {
+        id: 2,
+        userId,
+        ...coupleData,
+        nationalPension: 0,
+        retirementPension: 0,
+        personalPension: 0,
+        housingPension: 0,
+        updatedAt: new Date("2026-08-12T00:00:00.000Z"),
+      };
+      (mockDiagnosisRepo.upsert as jest.Mock).mockResolvedValueOnce(saved);
+
+      // when
+      const result = await diagnosisService.saveLatest(userId, coupleData);
+
+      // then — 연금은 0, 배우자 연도는 유지
+      expect(mockDiagnosisRepo.upsert).toHaveBeenCalledWith(userId, {
+        ...coupleData,
+        nationalPension: 0,
+        retirementPension: 0,
+        personalPension: 0,
+        housingPension: 0,
+      });
+      expect(result.spouseBirthYear).toBe(1982);
+      expect(result.householdSize).toBe(2);
     });
   });
 

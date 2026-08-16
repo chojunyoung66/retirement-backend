@@ -4,6 +4,44 @@ import type {
 } from "../../application/contracts/diagnosis-repo.contract.js";
 import { prisma } from "./prisma-client.js";
 
+function toRecord(diagnosis: {
+  id: number;
+  userId: number;
+  householdType: string;
+  householdSize: number;
+  birthYear: number;
+  retirementYear: number;
+  spouseBirthYear: number | null;
+  spouseRetirementYear: number | null;
+  nationalPension: number;
+  retirementPension: number;
+  personalPension: number;
+  housingPension: number;
+  monthlyExpense: number;
+  healthInsurance: number;
+  privateInsurance: number;
+  updatedAt: Date;
+}) {
+  return {
+    id: diagnosis.id,
+    userId: diagnosis.userId,
+    householdType: diagnosis.householdType,
+    householdSize: diagnosis.householdSize,
+    birthYear: diagnosis.birthYear,
+    retirementYear: diagnosis.retirementYear,
+    spouseBirthYear: diagnosis.spouseBirthYear,
+    spouseRetirementYear: diagnosis.spouseRetirementYear,
+    nationalPension: diagnosis.nationalPension,
+    retirementPension: diagnosis.retirementPension,
+    personalPension: diagnosis.personalPension,
+    housingPension: diagnosis.housingPension,
+    monthlyExpense: diagnosis.monthlyExpense,
+    healthInsurance: diagnosis.healthInsurance,
+    privateInsurance: diagnosis.privateInsurance,
+    updatedAt: diagnosis.updatedAt,
+  };
+}
+
 export const createDiagnosisRepo = (): IDiagnosisRepo => ({
   async findByUserId(userId: number) {
     // 사용자별 최신(유일) 진단 결과 조회
@@ -11,23 +49,7 @@ export const createDiagnosisRepo = (): IDiagnosisRepo => ({
       where: { userId },
     });
 
-    return diagnosis
-      ? {
-          id: diagnosis.id,
-          userId: diagnosis.userId,
-          householdType: diagnosis.householdType,
-          birthYear: diagnosis.birthYear,
-          retirementYear: diagnosis.retirementYear,
-          nationalPension: diagnosis.nationalPension,
-          retirementPension: diagnosis.retirementPension,
-          personalPension: diagnosis.personalPension,
-          housingPension: diagnosis.housingPension,
-          monthlyExpense: diagnosis.monthlyExpense,
-          healthInsurance: diagnosis.healthInsurance,
-          privateInsurance: diagnosis.privateInsurance,
-          updatedAt: diagnosis.updatedAt,
-        }
-      : null;
+    return diagnosis ? toRecord(diagnosis) : null;
   },
 
   async upsert(userId: number, data: DiagnosisData) {
@@ -38,21 +60,7 @@ export const createDiagnosisRepo = (): IDiagnosisRepo => ({
       update: { ...data },
     });
 
-    return {
-      id: diagnosis.id,
-      userId: diagnosis.userId,
-      householdType: diagnosis.householdType,
-      birthYear: diagnosis.birthYear,
-      retirementYear: diagnosis.retirementYear,
-      nationalPension: diagnosis.nationalPension,
-      retirementPension: diagnosis.retirementPension,
-      personalPension: diagnosis.personalPension,
-      housingPension: diagnosis.housingPension,
-      monthlyExpense: diagnosis.monthlyExpense,
-      healthInsurance: diagnosis.healthInsurance,
-      privateInsurance: diagnosis.privateInsurance,
-      updatedAt: diagnosis.updatedAt,
-    };
+    return toRecord(diagnosis);
   },
 
   async deleteByUserId(userId: number): Promise<void> {

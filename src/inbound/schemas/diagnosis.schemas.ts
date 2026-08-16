@@ -5,6 +5,12 @@ export const diagnosisDataSchema = z
     householdType: z.enum(["individual", "couple"], {
       error: "가구 유형은 individual 또는 couple 이어야 합니다",
     }),
+    householdSize: z
+      .number()
+      .int("가구원 수는 정수여야 합니다")
+      .min(1, "가구원 수는 1 이상이어야 합니다")
+      .max(5, "가구원 수는 5 이하여야 합니다")
+      .default(1),
     birthYear: z
       .number()
       .int("태어난 해는 정수여야 합니다")
@@ -15,6 +21,22 @@ export const diagnosisDataSchema = z
       .int("은퇴 예정 연도는 정수여야 합니다")
       .min(1900, "은퇴 예정 연도는 1900 이상이어야 합니다")
       .max(2100, "은퇴 예정 연도는 2100 이하여야 합니다"),
+    spouseBirthYear: z
+      .number()
+      .int("배우자 출생연도는 정수여야 합니다")
+      .min(1900, "배우자 출생연도는 1900 이상이어야 합니다")
+      .max(2010, "배우자 출생연도는 2010 이하여야 합니다")
+      .nullable()
+      .optional()
+      .default(null),
+    spouseRetirementYear: z
+      .number()
+      .int("배우자 은퇴 예정 연도는 정수여야 합니다")
+      .min(1900, "배우자 은퇴 예정 연도는 1900 이상이어야 합니다")
+      .max(2100, "배우자 은퇴 예정 연도는 2100 이하여야 합니다")
+      .nullable()
+      .optional()
+      .default(null),
     nationalPension: z
       .number()
       .nonnegative("국민연금은 0 이상이어야 합니다")
@@ -50,6 +72,18 @@ export const diagnosisDataSchema = z
   .refine((data) => data.retirementYear > data.birthYear, {
     message: "은퇴 예정 연도는 출생 연도보다 커야 합니다",
     path: ["retirementYear"],
-  });
+  })
+  .refine(
+    (data) => {
+      if (data.spouseBirthYear == null || data.spouseRetirementYear == null) {
+        return true;
+      }
+      return data.spouseRetirementYear > data.spouseBirthYear;
+    },
+    {
+      message: "배우자 은퇴 예정 연도는 배우자 출생 연도보다 커야 합니다",
+      path: ["spouseRetirementYear"],
+    },
+  );
 
 export type DiagnosisDataInput = z.infer<typeof diagnosisDataSchema>;

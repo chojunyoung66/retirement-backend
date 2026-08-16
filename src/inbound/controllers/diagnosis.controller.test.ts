@@ -14,8 +14,11 @@ describe("DiagnosisController", () => {
 
   const diagnosisBody = {
     householdType: "individual",
+    householdSize: 1,
     birthYear: 1980,
     retirementYear: 2045,
+    spouseBirthYear: null,
+    spouseRetirementYear: null,
     nationalPension: 900000,
     retirementPension: 500000,
     personalPension: 300000,

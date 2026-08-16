@@ -21,6 +21,11 @@
 1. request 로그: method·path·status·latency·requestId (PII 제외)  
 2. auth 결과 코드 집계 (열거 유발 세분화 금지)  
 3. `*_FORBIDDEN` / rate-limit 초과 모니터링  
-4. diagnosis sanitize(연금 0)와 로그 필드 정합  
+4. diagnosis sanitize(연금 0)와 로그 필드 정합 · 부부 spouse/householdSize 필드 보존
 
 상세 funnel·제약: FE 정본 **§8**.
+
+## Diagnosis 배우자 필드 (2026-08)
+
+- `householdSize` (default 1), `spouseBirthYear?`, `spouseRetirementYear?`
+- 연금 실금액은 계속 0 sanitize. 배우자 금액은 서버 미저장.
