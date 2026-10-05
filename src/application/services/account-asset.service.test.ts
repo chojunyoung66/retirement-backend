@@ -42,6 +42,8 @@ const mockRepo = (): { [K in keyof IAccountAssetRepo]: jest.Mock } => ({
   update: jest.fn().mockImplementation(async (id, d) => record({ ...d, id })),
   delete: jest.fn(),
   deleteByUserId: jest.fn(),
+  findDetailDataConsentAt: jest.fn().mockResolvedValue(new Date("2026-10-01")),
+  recordDetailDataConsent: jest.fn(),
 });
 
 describe("assertValidAccountAsset", () => {
@@ -98,6 +100,36 @@ describe("AccountAssetService", () => {
       1,
       expect.objectContaining({ balance: 20_000_000, principalTaxCredited: 6_000_000 }),
     );
+  });
+
+  it("동의 기록 없이 첫 계좌를 저장하면 CONSENT_REQUIRED 400", async () => {
+    const repo = mockRepo();
+    repo.findDetailDataConsentAt.mockResolvedValueOnce(null);
+    const service = createAccountAssetService(repo);
+    await expect(service.create(1, data())).rejects.toMatchObject({
+      code: "CONSENT_REQUIRED",
+      statusCode: 400,
+    });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("첫 계좌 저장 시 동의하면 동의 시각을 기록하고 저장한다", async () => {
+    const repo = mockRepo();
+    repo.findDetailDataConsentAt.mockResolvedValueOnce(null);
+    const service = createAccountAssetService(repo);
+    await service.create(1, data(), { detailDataConsent: true });
+    expect(repo.recordDetailDataConsent).toHaveBeenCalledWith(1, expect.any(Date));
+    expect(repo.create).toHaveBeenCalled();
+  });
+
+  it("이미 계좌가 있는 기존 사용자는 동의 없이도 추가할 수 있다", async () => {
+    const repo = mockRepo();
+    repo.countByUserId.mockResolvedValueOnce(2);
+    repo.findDetailDataConsentAt.mockResolvedValueOnce(null);
+    const service = createAccountAssetService(repo);
+    await service.create(1, data());
+    expect(repo.create).toHaveBeenCalled();
+    expect(repo.recordDetailDataConsent).not.toHaveBeenCalled();
   });
 
   it("다른 사용자의 계좌는 403, 없으면 404", async () => {

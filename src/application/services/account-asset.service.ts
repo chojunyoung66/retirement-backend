@@ -96,7 +96,11 @@ export const createAccountAssetService = (accountAssetRepo: IAccountAssetRepo) =
       return accountAssetRepo.findByUserId(userId);
     },
 
-    async create(userId: number, data: AccountAssetData): Promise<AccountAssetRecord> {
+    async create(
+      userId: number,
+      data: AccountAssetData,
+      options: { detailDataConsent?: boolean } = {},
+    ): Promise<AccountAssetRecord> {
       assertValidAccountAsset(data);
       const count = await accountAssetRepo.countByUserId(userId);
       if (count >= MAX_ACCOUNT_ASSETS) {
@@ -105,6 +109,18 @@ export const createAccountAssetService = (accountAssetRepo: IAccountAssetRepo) =
           `계좌는 최대 ${MAX_ACCOUNT_ASSETS}개까지 등록할 수 있습니다`,
           400,
         );
+      }
+      // 첫 계좌 저장 전에는 상세 저장 동의가 필요 (기존 계좌 보유자는 그대로 허용)
+      if (count === 0) {
+        const consentAt = await accountAssetRepo.findDetailDataConsentAt(userId);
+        if (!consentAt && !options.detailDataConsent) {
+          throw new BusinessException(
+            "CONSENT_REQUIRED",
+            "계좌 잔액·과세구분 저장에 동의해 주세요",
+            400,
+          );
+        }
+        if (!consentAt) await accountAssetRepo.recordDetailDataConsent(userId, new Date());
       }
       return accountAssetRepo.create(userId, data);
     },

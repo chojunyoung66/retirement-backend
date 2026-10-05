@@ -62,6 +62,18 @@ export const createAccountAssetRepo = (): IAccountAssetRepo => ({
     const { count } = await prisma.accountAsset.deleteMany({ where: { userId } });
     return count;
   },
+
+  async findDetailDataConsentAt(userId: number) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { detailDataConsentAt: true },
+    });
+    return user?.detailDataConsentAt ?? null;
+  },
+
+  async recordDetailDataConsent(userId: number, at: Date) {
+    await prisma.user.update({ where: { id: userId }, data: { detailDataConsentAt: at } });
+  },
 });
 
 export type AccountAssetRepoType = ReturnType<typeof createAccountAssetRepo>;

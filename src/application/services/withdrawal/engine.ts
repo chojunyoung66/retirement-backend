@@ -7,7 +7,9 @@ import {
   SEVERANCE_TAX_RULES,
   UNEMPLOYMENT_RULES,
 } from "../../rules/rule-set.js";
-import { dependentStatusOf } from "./dependent.js";
+import { calculateHealthInsurance } from "../calculators/health-insurance.calculator.js";
+import { assessDependent, type DependentAssessment } from "./dependent.js";
+import { isaStrategyOf } from "./isa-transfer.js";
 import {
   ACCOUNT_LABEL,
   HEALTH_NOTES,
@@ -46,6 +48,7 @@ import {
   type PlanItem,
   type ScenarioResult,
   type ScenarioSetResult,
+  type ScenarioType,
   type YearRow,
 } from "./types.js";
 
@@ -408,8 +411,22 @@ const simulateScenario = (
   const ubStart = unemployment ? ymToIndex(unemployment.startYm) : 0;
   const ubEnd = unemployment ? ubStart + unemployment.months : 0;
 
-  const monthly: MonthlySeries = { ym: [], gross: [], tax: [], shortfall: [], balance: [] };
-  const yearly = new Map<number, YearRow & { cashLikeSum: number }>();
+  const spousePension = input.spouseNationalPension ?? null;
+  const spouseBirthYear = input.spouseBirthYear ?? input.birthYear;
+  const healthIn = Math.min(input.healthInsuranceInExpense ?? 0, input.monthlyExpense);
+  let assessment: DependentAssessment | null = null;
+  let healthMonthly = 0;
+  let financialIncomeYear = 0;
+
+  const monthly: MonthlySeries = {
+    ym: [],
+    gross: [],
+    tax: [],
+    net: [],
+    shortfall: [],
+    balance: [],
+  };
+  const yearly = new Map<number, YearRow>();
   let unemploymentTotal = 0;
   let unemploymentFirst: number | null = null;
   let unemploymentLast: number | null = null;
@@ -425,12 +442,16 @@ const simulateScenario = (
       idx > startIdx ? pools.reduce((sum, p) => sum + growPool(p, mRate), 0) : 0;
 
     const yearsElapsed = Math.floor((idx - startIdx) / 12);
-    const expense =
-      input.monthlyExpense * Math.pow(1 + assumptions.inflationRate, yearsElapsed);
+    const inflation = Math.pow(1 + assumptions.inflationRate, yearsElapsed);
+    const pensionGrowth = Math.pow(1 + assumptions.pensionGrowthRate, yearsElapsed);
     const nationalPension =
       age >= input.nationalPension.startAge && input.nationalPension.monthlyAmount > 0
-        ? input.nationalPension.monthlyAmount *
-          Math.pow(1 + assumptions.pensionGrowthRate, yearsElapsed)
+        ? input.nationalPension.monthlyAmount * pensionGrowth
+        : 0;
+    const spouseAge = yearOfIndex(idx) - spouseBirthYear;
+    const spouseNationalPension =
+      spousePension && spouseAge >= spousePension.startAge && spousePension.monthlyAmount > 0
+        ? spousePension.monthlyAmount * pensionGrowth
         : 0;
     const ub =
       unemployment && idx >= ubStart && idx < ubEnd ? unemployment.monthlyAmount : 0;
@@ -482,6 +503,37 @@ const simulateScenario = (
       }
     }
 
+    // 연초(또는 시작월): 그해 공적연금·금융소득으로 피부양자를 추정하고 건강보험료를 정한다
+    if (assessment === null || idx % 12 === 0) {
+      const cashLikeNow = pools.filter(isCashLike).reduce((sum, p) => sum + balanceOf(p), 0);
+      financialIncomeYear = cashLikeNow * assumptions.financialYieldRate;
+      const npAnnual = nationalPension * 12;
+      const spouseNpAnnual = spouseNationalPension * 12;
+      assessment = assessDependent({
+        publicPensionAnnual: npAnnual,
+        financialIncomeAnnual: financialIncomeYear,
+        propertyValue: input.propertyValue,
+        spousePublicPensionAnnual: spousePension ? spouseNpAnnual : null,
+      });
+      if (assessment.status === "CHECK_NEEDED") {
+        // 재산 미입력: 진단에 입력한 현재 보험료를 물가만큼 올려 유지
+        healthMonthly = healthIn * inflation;
+      } else if (assessment.fails) {
+        healthMonthly = calculateHealthInsurance({
+          pensionIncome: npAnnual + spouseNpAnnual,
+          laborIncome: 0,
+          businessIncome: 0,
+          interestDividendIncome: financialIncomeYear,
+          otherIncome: 0,
+          propertyValue: input.propertyValue ?? 0,
+          carValue: 0,
+        }).estimatedMonthlyPremium;
+      } else {
+        healthMonthly = 0;
+      }
+    }
+    const expense = (input.monthlyExpense - healthIn) * inflation + healthMonthly;
+
     // 예정 연금수령
     let annuityNet = 0;
     for (const schedule of schedules) {
@@ -532,7 +584,7 @@ const simulateScenario = (
       return { net, remaining: Math.max(0, remaining) };
     };
 
-    const living = expense - nationalPension - ub;
+    const living = expense - nationalPension - spouseNationalPension - ub;
     // 생활비를 넘는 연금수령액은 현금으로 적립되므로 생활비 인출에서 뺀다
     const annuityUsed = Math.max(0, Math.min(annuityNet, living));
     monthGross -= annuityNet - annuityUsed;
@@ -563,63 +615,58 @@ const simulateScenario = (
     }
 
     const totalBalance = pools.reduce((sum, p) => sum + balanceOf(p), 0);
-    const cashLike = pools.filter(isCashLike).reduce((sum, p) => sum + balanceOf(p), 0);
 
     monthly.ym.push(indexToYm(idx));
     monthly.gross.push(round(monthGross));
     monthly.tax.push(round(monthTax));
+    monthly.net.push(round(monthNet));
     monthly.shortfall.push(round(monthShortfall));
     monthly.balance.push(round(totalBalance));
 
-    const row =
-      yearly.get(year) ??
-      ({
-        year,
-        age,
-        expense: 0,
-        nationalPension: 0,
-        unemployment: 0,
-        grossWithdrawal: 0,
-        tax: 0,
-        netWithdrawal: 0,
-        shortfall: 0,
-        endingBalance: 0,
-        financialIncome: 0,
-        dependentStatus: "CHECK_NEEDED",
-        cashLikeSum: 0,
-      } as YearRow & { cashLikeSum: number });
+    const row: YearRow = yearly.get(year) ?? {
+      year,
+      age,
+      expense: 0,
+      nationalPension: 0,
+      spouseNationalPension: 0,
+      unemployment: 0,
+      healthPremium: 0,
+      grossWithdrawal: 0,
+      tax: 0,
+      netWithdrawal: 0,
+      shortfall: 0,
+      endingBalance: 0,
+      financialIncome: financialIncomeYear,
+      dependentStatus: assessment.status,
+      dependentReasons: assessment.reasons,
+    };
     row.expense += expense;
     row.nationalPension += nationalPension;
+    row.spouseNationalPension += spouseNationalPension;
     row.unemployment += ub;
+    row.healthPremium += healthMonthly;
     row.grossWithdrawal += monthGross;
     row.tax += monthTax;
     row.netWithdrawal += monthNet;
     row.shortfall += monthShortfall;
     row.endingBalance = totalBalance;
-    row.cashLikeSum += cashLike;
     yearly.set(year, row);
   }
 
-  const yearRows: YearRow[] = [...yearly.values()].map(({ cashLikeSum, ...row }) => {
-    const financialIncome = (cashLikeSum * assumptions.financialYieldRate) / 12;
-    return {
-      ...row,
-      expense: round(row.expense),
-      nationalPension: round(row.nationalPension),
-      unemployment: round(row.unemployment),
-      grossWithdrawal: round(row.grossWithdrawal),
-      tax: round(row.tax),
-      netWithdrawal: round(row.netWithdrawal),
-      shortfall: round(row.shortfall),
-      endingBalance: round(row.endingBalance),
-      financialIncome: round(financialIncome),
-      dependentStatus: dependentStatusOf({
-        publicPensionAnnual: row.nationalPension,
-        financialIncomeAnnual: financialIncome,
-        propertyValue: input.propertyValue,
-      }),
-    };
-  });
+  const yearRows: YearRow[] = [...yearly.values()].map((row) => ({
+    ...row,
+    expense: round(row.expense),
+    nationalPension: round(row.nationalPension),
+    spouseNationalPension: round(row.spouseNationalPension),
+    unemployment: round(row.unemployment),
+    healthPremium: round(row.healthPremium),
+    grossWithdrawal: round(row.grossWithdrawal),
+    tax: round(row.tax),
+    netWithdrawal: round(row.netWithdrawal),
+    shortfall: round(row.shortfall),
+    endingBalance: round(row.endingBalance),
+    financialIncome: round(row.financialIncome),
+  }));
 
   const firstShortfallIdx = monthly.shortfall.findIndex((v) => v > 0);
   const totalTax = yearRows.reduce((s, r) => s + r.tax, 0);
@@ -658,6 +705,24 @@ const simulateScenario = (
     notes.push(
       `국민연금 개시(만 ${input.nationalPension.startAge}세) 이후 피부양자 요건을 다시 판정하세요. 피부양자 조건을 영구히 보장하는 전략이 아닙니다.`,
     );
+    // 국민연금 개시 전에도 요건을 넘으면 D안의 피부양자 효과가 제한된다
+    const preNpFails = yearRows.some(
+      (r) =>
+        r.age < input.nationalPension.startAge &&
+        r.dependentStatus !== "CHECK_NEEDED" &&
+        r.healthPremium > 0,
+    );
+    if (preNpFails) {
+      notes.push(
+        "국민연금 개시 전에도 재산·금융소득·배우자 소득 기준으로 피부양자 유지가 어려운 연도가 있어 D안의 건강보험료 절감 효과가 제한됩니다.",
+      );
+    }
+  }
+  const premiumYears = yearRows.filter((r) => r.healthPremium > 0 && r.dependentStatus !== "CHECK_NEEDED");
+  if (premiumYears.length > 0) {
+    notes.push(
+      `피부양자 요건을 넘는 ${premiumYears.length}개 연도는 지역가입자 건강보험료를 추정해 지출에 더했습니다.`,
+    );
   }
   if (thresholdYears.length > 0) {
     notes.push(
@@ -672,7 +737,7 @@ const simulateScenario = (
     type: strategy.type,
     title: strategy.title,
     goal: strategy.goal,
-    recommended: strategy.type === "D",
+    recommended: false,
     priorityOrder: strategy.priorityOrder,
     summary,
     planItems,
@@ -825,11 +890,58 @@ const accountChecksOf = (accounts: EngineAccount[]): AccountCheck[] =>
     };
   });
 
+// 동점이면 PRD 기본안인 D부터 우선한다
+const RECOMMEND_PREFERENCE: readonly ScenarioType[] = ["D", "C", "B", "A"];
+// 자산 소진 시점이 이 개월 수 이내로 차이 나면 같은 수준으로 본다
+const DEPLETION_TOLERANCE_MONTHS = 12;
+
+const manwon = (won: number): string => `${Math.round(won / 10_000).toLocaleString("ko-KR")}만원`;
+
+/**
+ * 추천안: 자산 소진이 가장 늦은 안들 중 피부양자 추정 가능 연수가 길고, 추정 세금이 적은 안.
+ */
+export const recommendScenario = (
+  scenarios: ScenarioResult[],
+): { type: ScenarioType; reason: string } => {
+  // 소진 시점 비교(소진 없음은 가장 늦은 것으로 본다)
+  const depletionIdx = (s: ScenarioResult): number =>
+    s.summary.firstShortfallYm ? ymToIndex(s.summary.firstShortfallYm) : Infinity;
+  const latest = Math.max(...scenarios.map(depletionIdx));
+  const candidates = scenarios.filter((s) =>
+    latest === Infinity
+      ? depletionIdx(s) === Infinity
+      : depletionIdx(s) >= latest - DEPLETION_TOLERANCE_MONTHS,
+  );
+
+  // 피부양자 연수 → 세금 → 기본 선호 순서로 정렬
+  const [best] = [...candidates].sort(
+    (a, b) =>
+      b.summary.dependentLikelyYears - a.summary.dependentLikelyYears ||
+      a.summary.totalTax - b.summary.totalTax ||
+      RECOMMEND_PREFERENCE.indexOf(a.type) - RECOMMEND_PREFERENCE.indexOf(b.type),
+  );
+  const chosen = best ?? scenarios[0]!;
+
+  const depletionText =
+    latest === Infinity ? "계산 기간 내 자산이 소진되지 않는 안" : "자산 소진이 가장 늦은 안";
+  const dependentText =
+    chosen.summary.dependentLikelyYears > 0
+      ? `피부양자 추정 가능 ${chosen.summary.dependentLikelyYears}년`
+      : "피부양자 추정 가능 기간 없음";
+  return {
+    type: chosen.type,
+    reason: `${depletionText} 중 ${dependentText}, 추정 세금 ${manwon(chosen.summary.totalTax)}으로 가장 유리합니다`,
+  };
+};
+
 export const generateScenarioSet = (input: EngineInput): ScenarioSetResult => {
   const assumptions: EngineAssumptions = { ...DEFAULT_ASSUMPTIONS, ...input.assumptions };
-  const scenarios = SCENARIO_TYPES.map((type) =>
+  const simulated = SCENARIO_TYPES.map((type) =>
     simulateScenario(STRATEGIES[type], input, assumptions),
   );
+  const recommendation = recommendScenario(simulated);
+  const scenarios = simulated.map((s) => ({ ...s, recommended: s.type === recommendation.type }));
+  const recommendedTitle = scenarios.find((s) => s.recommended)?.title ?? recommendation.type;
   const startIdx = ymToIndex(input.startYm);
   const endIdx = Math.max(
     startIdx + 11,
@@ -849,23 +961,25 @@ export const generateScenarioSet = (input: EngineInput): ScenarioSetResult => {
     startYm: input.startYm,
     endYm: indexToYm(endIdx),
     assumptions,
-    recommendedType: "D",
-    recommendationNote: `기본 추천은 D안(피부양자 우선 절세형)입니다. 국민연금 개시(만 ${input.nationalPension.startAge}세) 이후 피부양자 요건과 인출 계획을 다시 판정하세요.`,
+    recommendedType: recommendation.type,
+    recommendationNote: `${recommendedTitle}을 추천합니다. ${recommendation.reason}. 국민연금 개시(만 ${input.nationalPension.startAge}세) 이후 피부양자 요건과 인출 계획을 다시 판정하세요.`,
     inputSummary: {
       accountsCount: input.accounts.length,
       totalBalance: input.accounts.reduce((s, a) => s + a.balance, 0),
       nationalPensionSource: input.nationalPension.source,
       unemploymentSource: input.unemployment?.source ?? "none",
       yearsOfServiceSource: input.yearsOfService.source,
+      spouseNationalPensionSource: input.spouseNationalPension?.source ?? "none",
       propertyProvided: input.propertyValue !== null,
     },
     accountChecks: accountChecksOf(input.accounts),
+    isaStrategy: isaStrategyOf(input.accounts, input.startYm),
     scenarios,
     disclaimers: [
       "세무·투자 자문이 아닌 추정치입니다. 실제 세액과 건강보험료는 금융사·국세청·건강보험공단에서 확인하세요.",
       "생월을 반영하지 않아 나이는 연 단위로 계산합니다.",
       `물가 ${assumptions.inflationRate * 100}%, 연금 상승 ${assumptions.pensionGrowthRate * 100}%, 운용수익 ${assumptions.returnRate * 100}% 가정입니다.`,
-      "건강보험료 변화는 금액으로 반영하지 않고 피부양자 상태만 추정해 표시합니다.",
+      "피부양자 요건을 넘는 연도는 지역가입자 건강보험료(장기요양 포함)를 추정해 지출에 더하고, 추정 가능 연도는 0원으로 봅니다. 재산을 입력하지 않으면 진단에 입력한 보험료를 유지합니다.",
       "현금·일시금 수령분의 이자에는 15.4% 이자소득세를, 주식계좌는 국내 상장주식 매매차익 비과세를 가정했습니다.",
     ],
   };

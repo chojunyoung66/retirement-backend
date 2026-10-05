@@ -29,6 +29,14 @@ const diagnosisObjectSchema = z
       .int("은퇴 예정 연도는 정수여야 합니다")
       .min(1900, "은퇴 예정 연도는 1900 이상이어야 합니다")
       .max(2100, "은퇴 예정 연도는 2100 이하여야 합니다"),
+    retirementMonth: z
+      .number()
+      .int("은퇴 예정 월은 정수여야 합니다")
+      .min(1, "은퇴 예정 월은 1~12 사이여야 합니다")
+      .max(12, "은퇴 예정 월은 1~12 사이여야 합니다")
+      .nullable()
+      .optional()
+      .default(null),
     spouseBirthYear: z
       .number()
       .int("배우자 출생연도는 정수여야 합니다")

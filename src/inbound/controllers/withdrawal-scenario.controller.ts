@@ -43,6 +43,17 @@ export const createWithdrawalScenarioController = (
     }
   });
 
+  // DELETE /api/withdrawal-scenarios (본인 세트 전체 삭제)
+  router.delete("/", async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = requireUserId(req);
+      const deletedCount = await scenarioService.deleteAll(userId);
+      res.status(200).json({ success: true, data: { deletedCount } });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   // GET /api/withdrawal-scenarios/latest — 없으면 null
   router.get("/latest", async (req: Request, res: Response, next: NextFunction) => {
     try {

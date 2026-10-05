@@ -1,5 +1,6 @@
-import { generateScenarioSet } from "./engine.js";
-import { dependentStatusOf } from "./dependent.js";
+import { generateScenarioSet, recommendScenario } from "./engine.js";
+import { assessDependent, dependentStatusOf } from "./dependent.js";
+import { isaTransferOf } from "./isa-transfer.js";
 import { deferredRatioOf, privatePensionRateOf, retirementTaxRateOf } from "./tax.js";
 import { addMonths, ageAtIndex, indexOfAge, indexToYm, ymToIndex } from "./timeline.js";
 import type { EngineAccount, EngineInput } from "./types.js";
@@ -241,6 +242,7 @@ describe("generateScenarioSet (골든 페르소나)", () => {
     expect((d.firstShortfallYm ?? "9999") >= (a.firstShortfallYm ?? "9999")).toBe(true);
   });
 
+  // KR-2026.10 고도화: 국민연금이 피부양자 소득 기준을 넘는 연도에 지역보험료를 지출에 더해 소진이 앞당겨졌다
   it("골든 결과가 유지된다", () => {
     const summary = Object.fromEntries(
       set.scenarios.map((s) => [
@@ -253,10 +255,10 @@ describe("generateScenarioSet (골든 페르소나)", () => {
       ]),
     );
     expect(summary).toEqual({
-      A: { totalTax: 48_195_012, depletionAge: 82, firstShortfallYm: "2050-01" },
-      B: { totalTax: 44_013_759, depletionAge: 82, firstShortfallYm: "2050-06" },
-      C: { totalTax: 50_450_857, depletionAge: 82, firstShortfallYm: "2050-08" },
-      D: { totalTax: 41_902_520, depletionAge: 82, firstShortfallYm: "2050-12" },
+      A: { totalTax: 48_186_238, depletionAge: 81, firstShortfallYm: "2049-03" },
+      B: { totalTax: 43_999_241, depletionAge: 81, firstShortfallYm: "2049-07" },
+      C: { totalTax: 48_288_871, depletionAge: 81, firstShortfallYm: "2049-10" },
+      D: { totalTax: 42_883_763, depletionAge: 81, firstShortfallYm: "2049-12" },
     });
   });
 });
@@ -293,5 +295,154 @@ describe("generateScenarioSet (예외 입력)", () => {
   it("실업급여가 없으면 실업급여 항목을 만들지 않는다", () => {
     const d = scenarioOf("D", persona({ unemployment: null }));
     expect(d.planItems.some((p) => p.accountType === "UNEMPLOYMENT")).toBe(false);
+  });
+});
+
+describe("assessDependent", () => {
+  it("판단 사유와 요건 초과 여부를 함께 돌려준다", () => {
+    expect(
+      assessDependent({ publicPensionAnnual: 25_000_000, financialIncomeAnnual: 0, propertyValue: 300_000_000 }),
+    ).toEqual({ status: "CAUTION", reasons: ["INCOME_OVER"], fails: true });
+    expect(
+      assessDependent({ publicPensionAnnual: 19_000_000, financialIncomeAnnual: 0, propertyValue: 300_000_000 }),
+    ).toEqual({ status: "CAUTION", reasons: ["INCOME_NEAR"], fails: false });
+  });
+
+  it("부부는 배우자 소득이 기준을 넘으면 함께 탈락할 수 있다", () => {
+    const result = assessDependent({
+      publicPensionAnnual: 0,
+      financialIncomeAnnual: 0,
+      propertyValue: 300_000_000,
+      spousePublicPensionAnnual: 22_000_000,
+    });
+    expect(result.reasons).toEqual(["SPOUSE_INCOME_OVER"]);
+    expect(result.fails).toBe(true);
+  });
+
+  it("재산 5.4억~9억 구간은 소득 1천만원 초과일 때만 요건 초과다", () => {
+    const low = assessDependent({ publicPensionAnnual: 8_000_000, financialIncomeAnnual: 0, propertyValue: 600_000_000 });
+    const high = assessDependent({ publicPensionAnnual: 12_000_000, financialIncomeAnnual: 0, propertyValue: 600_000_000 });
+    expect(low).toMatchObject({ status: "CAUTION", reasons: ["PROPERTY_MID"], fails: false });
+    expect(high).toMatchObject({ reasons: ["PROPERTY_MID"], fails: true });
+  });
+});
+
+describe("isaTransferOf", () => {
+  it("전환액 10%(최대 300만원)를 추가 공제대상으로 보고 3천만원 초과분은 효과가 없다 (AC-08)", () => {
+    expect(isaTransferOf(20_000_000)).toMatchObject({ extraCreditBase: 2_000_000, excessOverCap: 0 });
+    expect(isaTransferOf(50_000_000)).toMatchObject({
+      extraCreditBase: 3_000_000,
+      excessOverCap: 20_000_000,
+      maxTaxCreditEstimate: 396_000,
+    });
+  });
+
+  it("세트 결과에 ISA 전략을 담고, 퇴직 후 만기면 효과 제한으로 표시한다", () => {
+    const set = generateScenarioSet(persona());
+    expect(set.isaStrategy).toHaveLength(1);
+    const isa = set.isaStrategy[0];
+    expect(isa).toMatchObject({ maturityYm: "2027-03", extraCreditBase: 3_000_000, effectLimitedAfterRetirement: true });
+    expect(isa.notes.some((n) => n.includes("60일"))).toBe(true);
+  });
+});
+
+describe("generateScenarioSet (고도화)", () => {
+  it("피부양자 요건을 넘는 연도에만 지역 건강보험료를 지출에 더한다", () => {
+    const set = generateScenarioSet(persona());
+    const d = set.scenarios.find((s) => s.type === "D")!;
+    for (const row of d.yearly) {
+      if (row.dependentStatus === "LIKELY") expect(row.healthPremium).toBe(0);
+      if (row.dependentReasons.includes("INCOME_OVER")) expect(row.healthPremium).toBeGreaterThan(0);
+    }
+    expect(d.yearly.some((r) => r.healthPremium > 0)).toBe(true);
+  });
+
+  it("진단 건강보험료는 피부양자 추정 가능 연도에 0원으로 대체된다", () => {
+    const base = scenarioOf("D", persona({ nationalPension: { monthlyAmount: 0, startAge: 64, source: "none" } }));
+    const withInput = scenarioOf(
+      "D",
+      persona({
+        nationalPension: { monthlyAmount: 0, startAge: 64, source: "none" },
+        monthlyExpense: 3_200_000,
+        healthInsuranceInExpense: 200_000,
+      }),
+    );
+    expect(withInput.yearly[1].expense).toBe(base.yearly[1].expense);
+  });
+
+  it("재산 미입력이면 진단 건강보험료를 그대로 유지한다", () => {
+    const d = scenarioOf("D", persona({ propertyValue: null, healthInsuranceInExpense: 200_000 }));
+    expect(d.yearly[0].healthPremium).toBe(200_000 * 2);
+    expect(d.yearly[0].dependentReasons).toEqual(["PROPERTY_UNKNOWN"]);
+  });
+
+  it("배우자 국민연금을 배우자 나이 기준으로 수입에 반영한다", () => {
+    const d = scenarioOf(
+      "D",
+      persona({
+        householdType: "couple",
+        spouseBirthYear: 1970,
+        spouseNationalPension: { monthlyAmount: 800_000, startAge: 65, source: "request" },
+      }),
+    );
+    const before = d.yearly.find((r) => r.year === 2034)!;
+    const after = d.yearly.find((r) => r.year === 2035)!;
+    expect(before.spouseNationalPension).toBe(0);
+    expect(after.spouseNationalPension).toBeGreaterThan(800_000 * 12);
+  });
+
+  it("월별 세후 인출 시리즈를 함께 돌려준다", () => {
+    const d = scenarioOf("D");
+    expect(d.monthly.net).toHaveLength(d.monthly.ym.length);
+    expect(d.monthly.net.every((v) => v >= 0)).toBe(true);
+  });
+
+  it("추천은 하나뿐이고 recommendedType과 일치한다", () => {
+    const set = generateScenarioSet(persona());
+    const recommended = set.scenarios.filter((s) => s.recommended);
+    expect(recommended).toHaveLength(1);
+    expect(recommended[0].type).toBe(set.recommendedType);
+    expect(set.recommendationNote).toContain("추천합니다");
+  });
+});
+
+describe("recommendScenario", () => {
+  const card = (
+    type: "A" | "B" | "C" | "D",
+    summary: Partial<{ firstShortfallYm: string | null; dependentLikelyYears: number; totalTax: number }>,
+  ) => ({
+    ...scenarioOf(type),
+    summary: {
+      ...scenarioOf(type).summary,
+      firstShortfallYm: null,
+      dependentLikelyYears: 0,
+      totalTax: 10_000_000,
+      ...summary,
+    },
+  });
+
+  it("소진이 가장 늦은 안들 중 피부양자 연수가 긴 안을 고른다", () => {
+    const result = recommendScenario([
+      card("A", { firstShortfallYm: "2040-01" }),
+      card("B", { dependentLikelyYears: 3 }),
+      card("C", { dependentLikelyYears: 5, totalTax: 20_000_000 }),
+      card("D", { dependentLikelyYears: 2 }),
+    ]);
+    expect(result.type).toBe("C");
+  });
+
+  it("피부양자 연수가 같으면 세금이 적은 안, 그마저 같으면 D를 고른다", () => {
+    expect(
+      recommendScenario([card("A", {}), card("B", { totalTax: 5_000_000 }), card("C", {}), card("D", {})]).type,
+    ).toBe("B");
+    expect(recommendScenario([card("A", {}), card("B", {}), card("C", {}), card("D", {})]).type).toBe("D");
+  });
+
+  it("12개월 이내 소진 차이는 같은 수준으로 본다", () => {
+    const result = recommendScenario([
+      card("A", { firstShortfallYm: "2049-12" }),
+      card("D", { firstShortfallYm: "2049-03", dependentLikelyYears: 4 }),
+    ]);
+    expect(result.type).toBe("D");
   });
 });

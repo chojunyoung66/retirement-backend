@@ -34,11 +34,19 @@ export interface EngineInput {
   householdType: string;
   /** 시작 시점 월 지출(생활비 + 건강보험료 + 민영보험료) */
   monthlyExpense: number;
+  /** monthlyExpense에 포함된 현재 건강보험료 — 피부양자 추정 결과로 대체한다 */
+  healthInsuranceInExpense?: number;
   nationalPension: {
     monthlyAmount: number;
     startAge: number;
     source: ValueSource;
   };
+  spouseBirthYear?: number | null;
+  spouseNationalPension?: {
+    monthlyAmount: number;
+    startAge: number;
+    source: ValueSource;
+  } | null;
   unemployment: {
     startYm: string;
     months: number;
@@ -65,6 +73,18 @@ export type ActionType = "LUMP_SUM" | "ANNUITY" | "AS_NEEDED" | "HOLD" | "INCOME
 
 export type DependentStatus = "LIKELY" | "CAUTION" | "CHECK_NEEDED";
 
+export type DependentReason =
+  | "PROPERTY_UNKNOWN"
+  | "INCOME_OVER"
+  | "INCOME_NEAR"
+  | "BUSINESS_INCOME_OVER"
+  | "FINANCIAL_INCOME_OVER"
+  | "FINANCIAL_INCOME_NEAR"
+  | "PROPERTY_MID"
+  | "PROPERTY_OVER"
+  | "SPOUSE_INCOME_OVER"
+  | "SPOUSE_INCOME_NEAR";
+
 export interface PlanItem {
   accountId: number | null;
   accountType: AccountKind | "UNEMPLOYMENT";
@@ -87,9 +107,13 @@ export interface PlanItem {
 export interface YearRow {
   year: number;
   age: number;
+  /** 건강보험료 포함 연 지출 */
   expense: number;
   nationalPension: number;
+  spouseNationalPension: number;
   unemployment: number;
+  /** 연 건강보험료(피부양자 추정 가능 연도는 0) */
+  healthPremium: number;
   grossWithdrawal: number;
   tax: number;
   netWithdrawal: number;
@@ -97,12 +121,14 @@ export interface YearRow {
   endingBalance: number;
   financialIncome: number;
   dependentStatus: DependentStatus;
+  dependentReasons: DependentReason[];
 }
 
 export interface MonthlySeries {
   ym: string[];
   gross: number[];
   tax: number[];
+  net: number[];
   shortfall: number[];
   balance: number[];
 }
@@ -140,6 +166,22 @@ export interface AccountCheck {
   unknownAmount: number;
 }
 
+export interface IsaStrategy {
+  accountId: number;
+  label: string;
+  balance: number;
+  maturityYm: string | null;
+  /** 만기 후 연금계좌 전환 시 추가 세액공제 대상 납입액: min(전환액×10%, 300만원) */
+  extraCreditBase: number;
+  /** 추가 공제 효과가 없는 3천만원 초과분 */
+  excessOverCap: number;
+  /** 총급여 5,500만원 초과 공제율(13.2%) 기준 최대 세액공제 추정 */
+  maxTaxCreditEstimate: number;
+  /** 만기가 계산 시작월(퇴직) 이후라 결정세액이 없으면 효과가 제한되는지 */
+  effectLimitedAfterRetirement: boolean;
+  notes: string[];
+}
+
 export interface BasisDate {
   domain: string;
   effectiveDate: string;
@@ -160,9 +202,11 @@ export interface ScenarioSetResult {
     nationalPensionSource: ValueSource;
     unemploymentSource: ValueSource;
     yearsOfServiceSource: ValueSource;
+    spouseNationalPensionSource: ValueSource;
     propertyProvided: boolean;
   };
   accountChecks: AccountCheck[];
+  isaStrategy: IsaStrategy[];
   scenarios: ScenarioResult[];
   disclaimers: string[];
 }

@@ -52,9 +52,10 @@ describe("buildReportDoc", () => {
 
   it("연도별 표는 머리행을 페이지마다 반복하고 모든 연도를 담는다", () => {
     const yearly = (doc.content as ContentTable[]).find(
-      (block) => block?.table?.widths?.length === 7,
+      (block) => block?.table?.widths?.length === 8,
     );
     expect(yearly?.table.headerRows).toBe(1);
+    expect(JSON.stringify(yearly?.table.body[0])).toContain("건보료");
     expect(yearly?.table.body.length).toBe(content.scenario.yearly.length + 1);
   });
 

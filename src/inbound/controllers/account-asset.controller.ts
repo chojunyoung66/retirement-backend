@@ -4,6 +4,7 @@ import { BusinessException } from "../../shared/exceptions/business.exception.js
 import {
   accountAssetCreateSchema,
   accountAssetUpdateSchema,
+  detailDataConsentSchema,
 } from "../schemas/account-asset.schemas.js";
 import { parseIdParam } from "../utils/parse-id.js";
 
@@ -43,7 +44,10 @@ export const createAccountAssetController = (accountAssetService: AccountAssetSe
           400,
         );
       }
-      const created = await accountAssetService.create(userId, validation.data);
+      const consent = detailDataConsentSchema.safeParse(req.body);
+      const created = await accountAssetService.create(userId, validation.data, {
+        detailDataConsent: consent.success && consent.data.detailDataConsent === true,
+      });
       res.status(201).json({ success: true, data: created });
     } catch (error) {
       next(error);

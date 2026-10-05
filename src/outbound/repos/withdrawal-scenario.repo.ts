@@ -66,6 +66,11 @@ export const createWithdrawalScenarioRepo = (): IWithdrawalScenarioRepo => ({
       where: { id: { in: stale.map((s) => s.id) } },
     });
   },
+
+  async deleteByUserId(userId) {
+    const { count } = await prisma.withdrawalScenarioSet.deleteMany({ where: { userId } });
+    return count;
+  },
 });
 
 export type WithdrawalScenarioRepoType = ReturnType<typeof createWithdrawalScenarioRepo>;

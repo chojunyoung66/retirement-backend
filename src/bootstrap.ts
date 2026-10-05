@@ -23,6 +23,7 @@ import { createAccountAssetService } from "./application/services/account-asset.
 import { createWithdrawalScenarioService } from "./application/services/withdrawal-scenario.service.js";
 import { createReportService } from "./application/services/report.service.js";
 import { createPdfRenderer } from "./application/services/report/pdf-renderer.js";
+import { createTaxHealthCheckService } from "./application/services/tax-health-check.service.js";
 
 // Controllers
 import { createAuthController } from "./inbound/controllers/auth.controller.js";
@@ -33,6 +34,7 @@ import { createDiagnosisController } from "./inbound/controllers/diagnosis.contr
 import { createAccountAssetController } from "./inbound/controllers/account-asset.controller.js";
 import { createWithdrawalScenarioController } from "./inbound/controllers/withdrawal-scenario.controller.js";
 import { createReportController } from "./inbound/controllers/report.controller.js";
+import { createTaxHealthCheckController } from "./inbound/controllers/tax-health-check.controller.js";
 
 // Middlewares
 import { createAuthMiddleware } from "./inbound/middlewares/auth.middleware.js";
@@ -87,6 +89,21 @@ const apiLimiter = rateLimit({
     error: {
       code: "TOO_MANY_REQUESTS",
       message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요",
+    },
+  },
+});
+
+// 계산·PDF 렌더링이 무거운 엔드포인트는 IP당 더 엄격하게 제한
+const heavyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: isDev ? 500 : 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: "TOO_MANY_REQUESTS",
+      message: "계산 요청이 너무 많습니다. 잠시 후 다시 시도해주세요",
     },
   },
 });
@@ -168,6 +185,7 @@ export const createApp = () => {
     scenarioRepo,
     renderPdf: createPdfRenderer(),
   });
+  const taxHealthCheckService = createTaxHealthCheckService();
 
   // Auth middleware 생성
   const authMiddleware = createAuthMiddleware(
@@ -186,6 +204,7 @@ export const createApp = () => {
     withdrawalScenarioService,
   );
   const reportController = createReportController(reportService);
+  const taxHealthCheckController = createTaxHealthCheckController(taxHealthCheckService);
 
   // Public routes (인증 불필요)
   app.use("/health", healthLimiter, healthRouter);
@@ -197,12 +216,21 @@ export const createApp = () => {
   app.use("/api/pension-portfolios", authMiddleware, portfolioController.router);
   app.use("/api/diagnoses", authMiddleware, diagnosisController.router);
   app.use("/api/account-assets", authMiddleware, accountAssetController.router);
+  // 무거운 계산 경로는 별도 한도를 먼저 적용
+  app.post("/api/withdrawal-scenarios/generate", heavyLimiter);
+  app.get("/api/reports/:id/pdf", heavyLimiter);
   app.use(
     "/api/withdrawal-scenarios",
     authMiddleware,
     withdrawalScenarioController.router,
   );
   app.use("/api/reports", authMiddleware, reportController.router);
+  app.use(
+    "/api/tax-health-check",
+    heavyLimiter,
+    authMiddleware,
+    taxHealthCheckController.router,
+  );
 
   // 매칭되지 않은 API 경로는 HTML 대신 JSON 404
   app.use("/api", (_req, res) => {

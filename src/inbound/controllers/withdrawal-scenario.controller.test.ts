@@ -19,6 +19,7 @@ describe("WithdrawalScenarioController", () => {
       getLatest: jest.fn(),
       getPlan: jest.fn(),
       select: jest.fn(),
+      deleteAll: jest.fn(),
     };
     const jwtUtil: Partial<IJwtUtil> = {
       sign: jest.fn(),
@@ -129,6 +130,14 @@ describe("WithdrawalScenarioController", () => {
       .send({ selectedType: "B" });
     expect(response.status).toBe(200);
     expect(service.select).toHaveBeenCalledWith(7, 1, "B");
+  });
+
+  it("본인 세트 전체를 삭제한다", async () => {
+    service.deleteAll.mockResolvedValueOnce(2);
+    const response = await request(app).delete("/withdrawal-scenarios").set(auth);
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual({ deletedCount: 2 });
+    expect(service.deleteAll).toHaveBeenCalledWith(1);
   });
 
   it("선택 유형이 없으면 400", async () => {

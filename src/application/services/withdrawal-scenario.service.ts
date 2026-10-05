@@ -12,7 +12,7 @@ import { BusinessException } from "../../shared/exceptions/business.exception.js
 import { getPensionStartAge } from "./calculators/national-pension.calculator.js";
 import { generateScenarioSet } from "./withdrawal/engine.js";
 import { ACCOUNT_LABEL } from "./withdrawal/strategies.js";
-import { currentYm } from "./withdrawal/timeline.js";
+import { currentYm, ymToIndex } from "./withdrawal/timeline.js";
 import type {
   EngineAccount,
   EngineAssumptions,
@@ -27,8 +27,12 @@ export const DEFAULT_YEARS_OF_SERVICE = 20;
 
 export interface GenerateScenarioRequest {
   nationalPension?: { monthlyAmount: number; startAge: number };
+  /** 배우자 국민연금 — 서버는 연금 금액을 저장하지 않으므로 요청으로만 받는다 */
+  spouseNationalPension?: { monthlyAmount: number; startAge: number } | null;
   /** null이면 실업급여 없음, 생략하면 최근 실업급여 시뮬레이션 사용 */
   unemployment?: { monthlyAmount: number; months: number } | null;
+  /** 실업급여 시작월(YYYY-MM), 생략하면 계산 시작월 */
+  unemploymentStartYm?: string;
   yearsOfService?: number;
   propertyValue?: number | null;
   assumptions?: Partial<Omit<EngineAssumptions, "endAge">>;
@@ -184,11 +188,16 @@ export const createWithdrawalScenarioService = (
       }
 
       const today = now();
-      // 퇴직 연도가 아직 오지 않았으면 그해 1월부터, 지났으면 이번 달부터 계산
-      const startYm =
-        diagnosis.retirementYear > today.getFullYear()
-          ? `${diagnosis.retirementYear}-01`
-          : currentYm(today);
+      // 퇴직월(미입력 시 1월)이 아직 오지 않았으면 그달부터, 지났으면 이번 달부터 계산
+      const retirementYm = `${diagnosis.retirementYear}-${String(diagnosis.retirementMonth ?? 1).padStart(2, "0")}`;
+      const thisYm = currentYm(today);
+      const startYm = ymToIndex(retirementYm) > ymToIndex(thisYm) ? retirementYm : thisYm;
+      // 실업급여는 계산 시작월 이후에만 받을 수 있다
+      const unemploymentStartYm =
+        request.unemploymentStartYm && ymToIndex(request.unemploymentStartYm) > ymToIndex(startYm)
+          ? request.unemploymentStartYm
+          : startYm;
+      const spouse = request.spouseNationalPension;
 
       const input: EngineInput = {
         startYm,
@@ -196,12 +205,16 @@ export const createWithdrawalScenarioService = (
         householdType: diagnosis.householdType,
         monthlyExpense:
           diagnosis.monthlyExpense + diagnosis.healthInsurance + diagnosis.privateInsurance,
+        healthInsuranceInExpense: diagnosis.healthInsurance,
         nationalPension: await resolveNationalPension(
           userId,
           diagnosis.birthYear,
           request.nationalPension,
         ),
-        unemployment: await resolveUnemployment(userId, startYm, request.unemployment),
+        spouseBirthYear: diagnosis.spouseBirthYear,
+        spouseNationalPension:
+          spouse && spouse.monthlyAmount > 0 ? { ...spouse, source: "request" } : null,
+        unemployment: await resolveUnemployment(userId, unemploymentStartYm, request.unemployment),
         yearsOfService: await resolveYearsOfService(userId, request.yearsOfService),
         propertyValue: request.propertyValue ?? null,
         accounts: assets.map(toEngineAccount),
@@ -257,6 +270,11 @@ export const createWithdrawalScenarioService = (
       assertOwned(await scenarioRepo.findById(id), userId);
       const updated = await scenarioRepo.updateSelection(id, selectedType);
       return { id: updated.id, selectedType };
+    },
+
+    // 원자료 삭제: 세트 input에 남은 계좌 잔액까지 지운다
+    async deleteAll(userId: number): Promise<number> {
+      return scenarioRepo.deleteByUserId(userId);
     },
   };
 };

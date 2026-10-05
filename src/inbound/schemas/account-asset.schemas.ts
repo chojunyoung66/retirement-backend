@@ -57,6 +57,11 @@ export const accountAssetCreateSchema = z
 
 export type AccountAssetCreateInput = z.infer<typeof accountAssetCreateSchema>;
 
+/** 첫 계좌 저장 시 함께 보내는 상세 저장 동의 — 계좌 데이터와 분리해 읽는다 */
+export const detailDataConsentSchema = z.object({
+  detailDataConsent: z.boolean().optional(),
+});
+
 // 부분 수정: 보낸 항목만 반영하고, 유형별 허용 항목·합계 검증은 서비스에서 병합 후 수행
 export const accountAssetUpdateSchema = z
   .object({

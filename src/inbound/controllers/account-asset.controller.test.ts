@@ -70,7 +70,19 @@ describe("AccountAssetController", () => {
       irpSource: null,
       pensionSavingsLegacy: null,
       isaMaturityYm: null,
-    });
+    }, { detailDataConsent: false });
+  });
+
+  it("상세 저장 동의를 계좌 데이터와 분리해 전달한다", async () => {
+    service.create.mockResolvedValueOnce({ id: 4 });
+    const response = await request(app)
+      .post("/account-assets")
+      .set(auth)
+      .send({ accountType: "CASH", balance: 1_000_000, detailDataConsent: true });
+    expect(response.status).toBe(201);
+    const [, data, options] = service.create.mock.calls[0];
+    expect(data).not.toHaveProperty("detailDataConsent");
+    expect(options).toEqual({ detailDataConsent: true });
   });
 
   it.each([

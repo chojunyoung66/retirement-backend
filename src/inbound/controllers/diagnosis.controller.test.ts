@@ -17,6 +17,7 @@ describe("DiagnosisController", () => {
     householdSize: 1,
     birthYear: 1980,
     retirementYear: 2045,
+    retirementMonth: null,
     spouseBirthYear: null,
     spouseRetirementYear: null,
     nationalPension: 900000,

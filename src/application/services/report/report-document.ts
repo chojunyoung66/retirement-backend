@@ -91,7 +91,10 @@ const planItemBlock = (item: PlanItem): Content => {
       { text: [{ text: "세금 ", bold: true }, item.taxNote] },
       { text: [{ text: "건강보험 ", bold: true }, item.healthInsuranceNote] },
       ...(item.cautions.length > 0
-        ? [{ ul: item.cautions, color: COLOR.caution, fontSize: 10 } as Content]
+        ? [
+            { text: "운영 메모", bold: true, fontSize: 10 } as Content,
+            { ul: item.cautions, color: COLOR.caution, fontSize: 10 } as Content,
+          ]
         : []),
     ],
   };
@@ -138,10 +141,12 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
   ];
 
   const yearlyRows: TableCell[][] = [
-    ["나이", "지출", "세후 인출", "세금", "부족", "연말 잔액", "피부양자"].map(headerCell),
+    ["나이", "지출", "건보료", "세후 인출", "세금", "부족", "연말 잔액", "피부양자"].map(headerCell),
     ...scenario.yearly.map((row): TableCell[] => [
       { text: [`${row.age}세\n`, { text: String(row.year), fontSize: 7, color: COLOR.muted }] },
       formatWan(row.expense),
+      // 고도화 이전 리포트에는 건보료 필드가 없다
+      formatWan(row.healthPremium ?? 0),
       formatWan(row.netWithdrawal),
       formatWan(row.tax),
       row.shortfall > 0
@@ -155,6 +160,20 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
   const checkNeeded = content.accountChecks.filter(
     (check) => check.nonDeductibleStatus === "CHECK_NEEDED",
   );
+
+  // 고도화 이전 리포트에는 ISA 전략이 없다
+  const isaBlocks: Content[] = (content.isaStrategy ?? []).map((isa) => ({
+    stack: [
+      {
+        text: [
+          { text: isa.label, bold: true },
+          ` · 추가 공제대상 ${formatWan(isa.extraCreditBase)} · 최대 세액공제 약 ${formatWan(isa.maxTaxCreditEstimate)}`,
+        ],
+      },
+      { ul: isa.notes, style: "muted" },
+    ],
+    margin: [0, 0, 0, 6],
+  }));
 
   return {
     info: { title: content.title },
@@ -244,13 +263,17 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
         ...scenario.planItems.map(planItemBlock),
       ),
 
+      ...(isaBlocks.length > 0
+        ? section("ISA 만기·연금계좌 전환", isaBlocks[0]!, ...isaBlocks.slice(1))
+        : []),
+
       // 긴 표라서 새 페이지에서 시작한다
       { text: "연도별 현금흐름 (연간 합계)", style: "section", pageBreak: "before" },
       {
         table: {
           headerRows: 1,
           dontBreakRows: true,
-          widths: [40, "*", "*", "*", "*", "*", 50],
+          widths: [40, "*", "*", "*", "*", "*", "*", 50],
           body: yearlyRows,
         },
         layout: tableLayout,

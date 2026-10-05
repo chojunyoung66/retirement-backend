@@ -41,4 +41,7 @@ export interface IAccountAssetRepo {
   update(id: number, data: AccountAssetData): Promise<AccountAssetRecord>;
   delete(id: number): Promise<void>;
   deleteByUserId(userId: number): Promise<number>;
+  /** 계좌 상세 저장 동의 시각 (User.detailDataConsentAt) */
+  findDetailDataConsentAt(userId: number): Promise<Date | null>;
+  recordDetailDataConsent(userId: number, at: Date): Promise<void>;
 }

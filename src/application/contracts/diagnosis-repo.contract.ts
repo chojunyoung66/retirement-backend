@@ -3,6 +3,8 @@ export interface DiagnosisData {
   householdSize: number;
   birthYear: number;
   retirementYear: number;
+  /** 1~12, 미입력이면 null(계산 시 1월로 본다) */
+  retirementMonth: number | null;
   spouseBirthYear: number | null;
   spouseRetirementYear: number | null;
   nationalPension: number;

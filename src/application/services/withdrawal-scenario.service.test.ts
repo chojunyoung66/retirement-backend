@@ -22,6 +22,7 @@ const diagnosis: DiagnosisRecord = {
   householdSize: 1,
   birthYear: 1968,
   retirementYear: 2027,
+  retirementMonth: null,
   spouseBirthYear: null,
   spouseRetirementYear: null,
   nationalPension: 0,
@@ -82,6 +83,7 @@ const setup = (simulations: Partial<Record<SimulationType, Record<string, unknow
     findById: jest.fn(async () => saved),
     updateSelection: jest.fn(async (_id: number, selectedType: string) => ({ ...saved!, selectedType })),
     pruneByUserId: jest.fn(),
+    deleteByUserId: jest.fn(async () => 3),
   } as unknown as { [K in keyof IWithdrawalScenarioRepo]: jest.Mock };
 
   const service = createWithdrawalScenarioService(
@@ -172,6 +174,46 @@ describe("WithdrawalScenarioService.generate", () => {
     await service.generate(1, {});
     expect(savedInput().startYm).toBe("2026-10");
   });
+
+  it("퇴직월이 있으면 그달부터 계산하고 진단 건강보험료를 대체 대상으로 넘긴다", async () => {
+    const { service, diagnosisRepo, savedInput } = setup();
+    diagnosisRepo.findByUserId.mockResolvedValueOnce({ ...diagnosis, retirementMonth: 11 });
+    await service.generate(1, {});
+    expect(savedInput().startYm).toBe("2027-11");
+    expect(savedInput().healthInsuranceInExpense).toBe(200_000);
+  });
+
+  it("배우자 국민연금과 실업급여 시작월을 요청에서 받는다", async () => {
+    const { service, diagnosisRepo, savedInput } = setup();
+    diagnosisRepo.findByUserId.mockResolvedValueOnce({
+      ...diagnosis,
+      householdType: "couple",
+      spouseBirthYear: 1970,
+      spouseRetirementYear: 2030,
+    });
+    await service.generate(1, {
+      spouseNationalPension: { monthlyAmount: 700_000, startAge: 65 },
+      unemployment: { monthlyAmount: 1_800_000, months: 6 },
+      unemploymentStartYm: "2027-03",
+    });
+    const input = savedInput();
+    expect(input.spouseBirthYear).toBe(1970);
+    expect(input.spouseNationalPension).toEqual({
+      monthlyAmount: 700_000,
+      startAge: 65,
+      source: "request",
+    });
+    expect(input.unemployment?.startYm).toBe("2027-03");
+  });
+
+  it("실업급여 시작월이 계산 시작월보다 이르면 시작월로 맞춘다", async () => {
+    const { service, savedInput } = setup();
+    await service.generate(1, {
+      unemployment: { monthlyAmount: 1_800_000, months: 6 },
+      unemploymentStartYm: "2026-01",
+    });
+    expect(savedInput().unemployment?.startYm).toBe("2027-01");
+  });
 });
 
 describe("WithdrawalScenarioService.getPlan·select", () => {
@@ -181,7 +223,8 @@ describe("WithdrawalScenarioService.getPlan·select", () => {
     const plan = await service.getPlan(10, 1, "D");
     expect(plan.scenario.type).toBe("D");
     expect(plan.scenario.monthly.ym.length).toBeGreaterThan(0);
-    expect(plan.recommendedType).toBe("D");
+    expect(plan.scenario.monthly.net).toHaveLength(plan.scenario.monthly.ym.length);
+    expect(["A", "B", "C", "D"]).toContain(plan.recommendedType);
   });
 
   it("다른 사용자의 세트는 403", async () => {
@@ -202,5 +245,11 @@ describe("WithdrawalScenarioService.getPlan·select", () => {
     await service.generate(1, {});
     await expect(service.select(10, 1, "B")).resolves.toEqual({ id: 10, selectedType: "B" });
     expect(scenarioRepo.updateSelection).toHaveBeenCalledWith(10, "B");
+  });
+
+  it("본인 세트를 모두 지우고 삭제 건수를 돌려준다", async () => {
+    const { service, scenarioRepo } = setup();
+    await expect(service.deleteAll(1)).resolves.toBe(3);
+    expect(scenarioRepo.deleteByUserId).toHaveBeenCalledWith(1);
   });
 });

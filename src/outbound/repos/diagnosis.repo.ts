@@ -11,6 +11,7 @@ function toRecord(diagnosis: {
   householdSize: number;
   birthYear: number;
   retirementYear: number;
+  retirementMonth: number | null;
   spouseBirthYear: number | null;
   spouseRetirementYear: number | null;
   nationalPension: number;
@@ -29,6 +30,7 @@ function toRecord(diagnosis: {
     householdSize: diagnosis.householdSize,
     birthYear: diagnosis.birthYear,
     retirementYear: diagnosis.retirementYear,
+    retirementMonth: diagnosis.retirementMonth,
     spouseBirthYear: diagnosis.spouseBirthYear,
     spouseRetirementYear: diagnosis.spouseRetirementYear,
     nationalPension: diagnosis.nationalPension,

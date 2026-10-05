@@ -22,6 +22,15 @@ import {
   calculateIrp,
   calculateIsa,
 } from "../../application/services/calculators/savings-account.calculator.js";
+import { withRuleBasis, type RuleBasis } from "../../application/rules/rule-basis.js";
+import {
+  HEALTH_INSURANCE_RULES,
+  IRP_RULES,
+  ISA_RULES,
+  NATIONAL_PENSION_RULES,
+  SEVERANCE_TAX_RULES,
+  UNEMPLOYMENT_RULES,
+} from "../../application/rules/rule-set.js";
 
 type Json = Record<string, unknown>;
 
@@ -64,12 +73,14 @@ export const createSimulationController = (
     schema: ZodType<T>,
     calculate: (input: T) => object,
     save: (userId: number, input: Json, output: Json) => Promise<unknown>,
+    basis?: RuleBasis,
   ) => {
     router.post(path, async (req: Request, res: Response, next: NextFunction) => {
       try {
         const userId = requireUserId(req);
         const input = parseBody(schema, req.body);
-        const output = calculate(input);
+        const calculated = calculate(input);
+        const output = basis ? withRuleBasis(basis, calculated) : calculated;
         const result = await save(userId, input as Json, output as Json);
         res.status(201).json({ success: true, data: result });
       } catch (error) {
@@ -99,13 +110,18 @@ export const createSimulationController = (
     healthInsuranceSimulationSchema,
     calculateHealthInsurance,
     (u, i, o) => simulationService.createHealthInsurance(u, i, o),
+    { domain: "건강보험", meta: HEALTH_INSURANCE_RULES.meta },
   );
   registerLatest("/health-insurance/latest", (u) =>
     simulationService.getLatestHealthInsurance(u),
   );
 
-  registerCreate("/isa", isaSimulationSchema, calculateIsa, (u, i, o) =>
-    simulationService.createIsa(u, i, o),
+  registerCreate(
+    "/isa",
+    isaSimulationSchema,
+    calculateIsa,
+    (u, i, o) => simulationService.createIsa(u, i, o),
+    { domain: "ISA", meta: ISA_RULES.meta },
   );
   registerLatest("/isa/latest", (u) => simulationService.getLatestIsa(u));
 
@@ -114,13 +130,18 @@ export const createSimulationController = (
     nationalPensionSimulationSchema,
     calculateNationalPension,
     (u, i, o) => simulationService.createNationalPension(u, i, o),
+    { domain: "국민연금", meta: NATIONAL_PENSION_RULES.meta },
   );
   registerLatest("/national-pension/latest", (u) =>
     simulationService.getLatestNationalPension(u),
   );
 
-  registerCreate("/irp", irpSimulationSchema, calculateIrp, (u, i, o) =>
-    simulationService.createIrp(u, i, o),
+  registerCreate(
+    "/irp",
+    irpSimulationSchema,
+    calculateIrp,
+    (u, i, o) => simulationService.createIrp(u, i, o),
+    { domain: "연금계좌 세액공제", meta: IRP_RULES.meta },
   );
   registerLatest("/irp/latest", (u) => simulationService.getLatestIrp(u));
 
@@ -129,6 +150,7 @@ export const createSimulationController = (
     severancePaySimulationSchema,
     calculateSeverancePay,
     (u, i, o) => simulationService.createSeverancePay(u, i, o),
+    { domain: "퇴직소득세", meta: SEVERANCE_TAX_RULES.meta },
   );
   registerLatest("/severance-pay/latest", (u) =>
     simulationService.getLatestSeverancePay(u),
@@ -139,6 +161,7 @@ export const createSimulationController = (
     unemploymentBenefitSimulationSchema,
     calculateUnemploymentBenefit,
     (u, i, o) => simulationService.createUnemploymentBenefit(u, i, o),
+    { domain: "실업급여", meta: UNEMPLOYMENT_RULES.meta },
   );
   registerLatest("/unemployment-benefit/latest", (u) =>
     simulationService.getLatestUnemploymentBenefit(u),

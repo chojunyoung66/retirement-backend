@@ -23,6 +23,8 @@ model User {
   googleSub    String?  @unique
   name         String
   profileImage String?
+  // 계좌 잔액·과세구분 상세 저장 동의 시각 — 첫 계좌 저장 시 기록
+  detailDataConsentAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -57,6 +59,7 @@ model Diagnosis {
   householdSize        Int      @default(1)
   birthYear            Int
   retirementYear       Int
+  retirementMonth      Int?
   spouseBirthYear      Int?
   spouseRetirementYear Int?
   nationalPension      Int

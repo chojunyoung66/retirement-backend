@@ -24,4 +24,6 @@ export interface IWithdrawalScenarioRepo {
   updateSelection(id: number, selectedType: ScenarioType): Promise<WithdrawalScenarioSetRecord>;
   /** 최신 keep건만 남기고 이전 세트를 지운다 */
   pruneByUserId(userId: number, keep: number): Promise<void>;
+  /** 본인 세트 전체 삭제 — 리포트는 SetNull로 남는다 */
+  deleteByUserId(userId: number): Promise<number>;
 }

@@ -18,16 +18,29 @@ export const scenarioTypeSchema = z.enum(["A", "B", "C", "D"] satisfies Scenario
   error: "시나리오 유형은 A, B, C, D 중 하나여야 합니다",
 });
 
+const pensionStartAge = (label: string) =>
+  z
+    .number()
+    .int(`${label} 개시 연령은 정수여야 합니다`)
+    .min(55, `${label} 개시 연령은 55세 이상이어야 합니다`)
+    .max(70, `${label} 개시 연령은 70세 이하여야 합니다`);
+
+const ymString = (label: string) =>
+  z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, `${label}은(는) YYYY-MM 형식이어야 합니다`);
+
 export const generateScenarioSchema = z.object({
   nationalPension: z
     .object({
       monthlyAmount: wonAmount("국민연금 월액", 10_000_000),
-      startAge: z
-        .number()
-        .int("국민연금 개시 연령은 정수여야 합니다")
-        .min(55, "국민연금 개시 연령은 55세 이상이어야 합니다")
-        .max(70, "국민연금 개시 연령은 70세 이하여야 합니다"),
+      startAge: pensionStartAge("국민연금"),
     })
+    .optional(),
+  spouseNationalPension: z
+    .object({
+      monthlyAmount: wonAmount("배우자 국민연금 월액", 10_000_000),
+      startAge: pensionStartAge("배우자 국민연금"),
+    })
+    .nullable()
     .optional(),
   unemployment: z
     .object({
@@ -40,6 +53,7 @@ export const generateScenarioSchema = z.object({
     })
     .nullable()
     .optional(),
+  unemploymentStartYm: ymString("실업급여 시작월").optional(),
   yearsOfService: z
     .number()
     .positive("근속연수는 0보다 커야 합니다")

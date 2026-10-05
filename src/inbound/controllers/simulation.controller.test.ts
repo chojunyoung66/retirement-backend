@@ -88,7 +88,11 @@ describe("SimulationController", () => {
       expect(mockSimulationService.createHealthInsurance).toHaveBeenCalledWith(
         1,
         expect.objectContaining(inputBody),
-        expect.any(Object),
+        expect.objectContaining({
+          estimatedMonthlyPremium: expect.any(Number),
+          basisDate: expect.objectContaining({ domain: "건강보험" }),
+          ruleVersion: expect.any(String),
+        }),
       );
     });
 

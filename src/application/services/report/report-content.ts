@@ -3,6 +3,7 @@ import type {
   ActionType,
   BasisDate,
   EngineAssumptions,
+  IsaStrategy,
   PlanItem,
   ScenarioResult,
   ScenarioSetResult,
@@ -52,6 +53,7 @@ export interface ReportContent {
   comparison: ReportComparisonRow[];
   scenario: Omit<ScenarioResult, "monthly">;
   accountChecks: AccountCheck[];
+  isaStrategy: IsaStrategy[];
   disclaimers: string[];
 }
 
@@ -104,6 +106,8 @@ export const buildReportContent = (
     })),
     scenario,
     accountChecks: result.accountChecks,
+    // 고도화 이전에 저장된 세트에는 ISA 전략이 없다
+    isaStrategy: result.isaStrategy ?? [],
     disclaimers: result.disclaimers,
   };
 };

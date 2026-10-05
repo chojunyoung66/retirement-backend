@@ -104,6 +104,8 @@ src/
   (세액공제 받은/안 받은 원금·운용수익·이연퇴직소득, ISA 만기월 등)이 정해져 있고,
   허용되지 않은 필드는 `ACCOUNT_ASSET_FIELD_NOT_ALLOWED`, 세부 합계가 잔액을 넘으면
   `ACCOUNT_ASSET_BUCKET_EXCEEDS_BALANCE`(모두 400)를 반환합니다.
+- 첫 계좌는 본문에 `detailDataConsent: true`를 함께 보내야 저장됩니다(없으면 `CONSENT_REQUIRED` 400).
+  동의 시각은 `User.detailDataConsentAt`에 기록하며, 이미 계좌가 있던 사용자는 그대로 추가할 수 있습니다.
 
 ### 인출 시나리오
 | Method | Path | 설명 |
@@ -112,9 +114,15 @@ src/
 | GET | `/api/withdrawal-scenarios/latest` | 최신 시나리오 세트 (없으면 `data: null`) |
 | GET | `/api/withdrawal-scenarios/:id/plans/:type` | 시나리오(`A`~`D`)의 계좌별 실행안·월별 흐름 |
 | PATCH | `/api/withdrawal-scenarios/:id/selection` | 선택 시나리오 저장 |
+| DELETE | `/api/withdrawal-scenarios` | 내 시나리오 세트 전체 삭제 (`{ deletedCount }`, 리포트는 유지) |
 
 - 엔진은 `src/application/services/withdrawal/`에 있습니다. A 일시금, B 10년 연금, C 20년 이상 연금,
-  D 피부양자 우선 절세형(기본 추천)을 같은 입력으로 월 단위 계산합니다.
+  D 피부양자 우선 절세형을 같은 입력으로 월 단위 계산하고, 자산 지속 기간 → 피부양자 유지 연수 →
+  총세금 순의 규칙으로 추천합니다(`recommendScenario`).
+- 요청 본문으로 본인·배우자 국민연금(`nationalPension`, `spouseNationalPension`), 실업급여 시작월
+  (`unemploymentStartYm`), 재산 과세표준을 받습니다. 계산 시작월은 진단의 퇴직 연도·월(`retirementMonth`)입니다.
+- 연초마다 피부양자를 판정해 사유 코드(`dependentReasons`)를 남기고, 요건을 넘는 연도는 지역 건강보험료
+  (`healthPremium`)를 추정해 진단의 건강보험료 대신 지출에 넣습니다. ISA 만기 전환 효과는 `isaStrategy`로 돌려줍니다.
 - 진단이 없으면 `DIAGNOSIS_REQUIRED`, 계좌가 없으면 `ACCOUNT_ASSETS_REQUIRED`(400)를 반환합니다.
 - 국민연금은 요청 값 → 최근 국민연금 시뮬레이션 → 0원 순서로, 실업급여·근속연수도 요청 값 →
   최근 시뮬레이션 순서로 채웁니다. 유저당 최근 5개 세트만 보관합니다.
@@ -123,6 +131,14 @@ src/
   주식계좌는 국내 상장주식 매매차익 비과세를 가정합니다.
 - 회원 탈퇴 시 계좌 자산과 시나리오 세트도 함께 삭제됩니다. 새 테이블 마이그레이션은 `npm start`의
   `prisma migrate deploy`로 자동 적용됩니다.
+
+### 세금·건강보험 체크 (무저장)
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | `/api/tax-health-check` | 소득·재산·실제 고지 보험료로 피부양자 3단계·사유, 지역보험료 추정·비교 |
+
+- 입력값은 저장하지 않습니다. 응답에 기준일(`basisDate`)·규칙 버전(`ruleVersion`)을 함께 줍니다.
+- 시뮬레이션 저장 결과(`outputData`)에도 같은 기준일·규칙 버전이 붙습니다(주택연금 제외).
 
 ### 실행계획 리포트
 | Method | Path | 설명 |
@@ -226,7 +242,8 @@ Cookie: retirement_token=eyJ...
   ISA 연 납입 2천만원 상한 · 실업급여 가입 0.5년 이상 · 포트폴리오 비중 합 100%,
   계좌 유형 `IRP`/`ISA`/`연금저축`/`일반계좌`, 항목 최대 50개
 - **세션:** idle 30분 슬라이딩 · absolute 12시간
-- **Rate limit (15분):** auth 20 · api 300 · health 120
+- **Rate limit (15분, IP당):** auth 40 · api 300 · health 120 · 무거운 API 20
+  (`POST /api/withdrawal-scenarios/generate`, `GET /api/reports/:id/pdf`, `/api/tax-health-check`)
 - **CORS:** production에서 `FRONTEND_ORIGIN` fail-closed · credentials 필수
 - **소유권:** Simulation · Portfolio · Diagnosis `/me` 스코프
 - **테스트:** TDD · 서비스와 동일 디렉터리 `*.test.ts`
