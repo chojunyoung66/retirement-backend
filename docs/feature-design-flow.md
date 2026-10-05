@@ -1,6 +1,6 @@
 # 고도화 기능 설계 · 흐름 정의서
 
-> 갱신: 2026-10-05 · PRD v1.1 고도화 반영  
+> 갱신: 2026-10-05 · PRD v1.1 고도화 반영 · 갭 분석: `retirement-frontend/docs/prd-v1.1-gap-analysis.md`  
 > **정본:** `retirement-frontend/docs/feature-design-flow.md`  
 > 보안 감사 상세 표는 레포 외부(Drive 등) 보관
 
