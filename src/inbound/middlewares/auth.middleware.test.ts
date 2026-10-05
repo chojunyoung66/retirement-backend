@@ -161,6 +161,80 @@ describe("AuthMiddleware", () => {
     expect(mockJwtUtil.verify).toHaveBeenCalledWith("this-is-not-a-jwt");
   });
 
+  describe("사용자 존재 확인", () => {
+    const buildApp = (userExists: (id: number) => Promise<boolean>) => {
+      const existsApp = express();
+      existsApp.use(cookieParser());
+      existsApp.get(
+        "/protected",
+        createAuthMiddleware(mockJwtUtil as IJwtUtil, userExists),
+        (req, res) => {
+          res.status(200).json({ success: true, data: { userId: req.userId } });
+        },
+      );
+      existsApp.use(errorMiddleware);
+      return existsApp;
+    };
+
+    it("탈퇴한 사용자의 유효 토큰이면 401과 함께 쿠키를 삭제한다", async () => {
+      (mockJwtUtil.verify as jest.Mock).mockReturnValueOnce({
+        userId: 99,
+        email: "gone@example.com",
+        sessionStartedAt: Date.now(),
+      });
+      const userExists = jest.fn().mockResolvedValue(false);
+
+      const response = await request(buildApp(userExists))
+        .get("/protected")
+        .set("Cookie", `${AUTH_COOKIE_NAME}=orphan.jwt.token`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error.code).toBe("UNAUTHORIZED");
+      expect(userExists).toHaveBeenCalledWith(99);
+      expect(mockJwtUtil.sign).not.toHaveBeenCalled();
+      const setCookie = response.headers["set-cookie"];
+      const cookieText = Array.isArray(setCookie)
+        ? setCookie.join(" ")
+        : (setCookie ?? "");
+      expect(cookieText).toContain(`${AUTH_COOKIE_NAME}=;`);
+      expect(cookieText).toMatch(/Expires=Thu, 01 Jan 1970/);
+    });
+
+    it("사용자가 존재하면 통과한다", async () => {
+      (mockJwtUtil.verify as jest.Mock).mockReturnValueOnce({
+        userId: 5,
+        email: "ok@example.com",
+        sessionStartedAt: Date.now(),
+      });
+      (mockJwtUtil.sign as jest.Mock).mockReturnValueOnce("refreshed");
+
+      const response = await request(buildApp(jest.fn().mockResolvedValue(true)))
+        .get("/protected")
+        .set("Cookie", `${AUTH_COOKIE_NAME}=valid.jwt.token`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.userId).toBe(5);
+    });
+
+    it("사용자 조회 중 DB 오류는 500으로 처리한다", async () => {
+      (mockJwtUtil.verify as jest.Mock).mockReturnValueOnce({
+        userId: 5,
+        email: "ok@example.com",
+        sessionStartedAt: Date.now(),
+      });
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+      const response = await request(
+        buildApp(jest.fn().mockRejectedValue(new Error("db down"))),
+      )
+        .get("/protected")
+        .set("Cookie", `${AUTH_COOKIE_NAME}=valid.jwt.token`);
+
+      expect(response.status).toBe(500);
+      consoleSpy.mockRestore();
+    });
+  });
+
   it("만료된 JWT면 401 UNAUTHORIZED", async () => {
     (mockJwtUtil.verify as jest.Mock).mockImplementationOnce(() => {
       throw new Error("jwt expired");

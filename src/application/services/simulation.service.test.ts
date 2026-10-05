@@ -157,7 +157,7 @@ describe("SimulationService", () => {
         investmentYears: 10,
       };
       const outputData = {
-        expectedProfit: 6052000000,
+        expectedProfit: 6052000,
         estimatedTaxSaving: 1210400,
         notice: "ISA 한도 내",
       };
@@ -214,7 +214,7 @@ describe("SimulationService", () => {
           investmentYears: 10,
         },
         outputData: {
-          expectedProfit: 6052000000,
+          expectedProfit: 6052000,
           estimatedTaxSaving: 1210400,
           notice: "ISA 한도 내",
         },
@@ -269,7 +269,7 @@ describe("SimulationService", () => {
         birthYear: 1970,
       };
       const outputData = {
-        estimatedMonthlyPension: 3276205,
+        estimatedMonthlyPension: 966628,
         pensionStartAge: 65,
         notice: "25년 가입 기준 예상 월 수령액입니다.",
       };
@@ -326,7 +326,7 @@ describe("SimulationService", () => {
           birthYear: 1970,
         },
         outputData: {
-          estimatedMonthlyPension: 3276205,
+          estimatedMonthlyPension: 966628,
           pensionStartAge: 65,
           notice: "25년 가입 기준",
         },
@@ -497,8 +497,8 @@ describe("SimulationService", () => {
       };
       const outputData = {
         severancePay: 90000000,
-        incomeTax: 7020000,
-        afterTaxAmount: 82980000,
+        incomeTax: 880000,
+        afterTaxAmount: 89032000,
         notice: "근속 20년 기준 법정 퇴직금 예상액입니다.",
       };
 
@@ -551,8 +551,8 @@ describe("SimulationService", () => {
         inputData: { averageMonthlyWage: 4500000, yearsOfService: 20 },
         outputData: {
           severancePay: 90000000,
-          incomeTax: 7020000,
-          afterTaxAmount: 82980000,
+          incomeTax: 880000,
+          afterTaxAmount: 89032000,
           notice: "...",
         },
         createdAt: new Date("2026-07-14"),

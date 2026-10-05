@@ -86,8 +86,6 @@ export const createUserRepo = (): IUserRepo => ({
     await prisma.$transaction(async (tx) => {
       await tx.simulationResult.deleteMany({ where: { userId: id } });
       await tx.diagnosis.deleteMany({ where: { userId: id } });
-      await tx.healthInsuranceSimulation.deleteMany({ where: { userId: id } });
-      await tx.isaSimulation.deleteMany({ where: { userId: id } });
       await tx.pensionPortfolio.deleteMany({ where: { userId: id } });
       await tx.user.delete({ where: { id } });
     });

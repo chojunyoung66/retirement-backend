@@ -145,7 +145,10 @@ export const createApp = () => {
   const diagnosisService = createDiagnosisService(diagnosisRepo);
 
   // Auth middleware 생성
-  const authMiddleware = createAuthMiddleware(jwtUtil);
+  const authMiddleware = createAuthMiddleware(
+    jwtUtil,
+    async (userId) => (await userRepo.findById(userId)) !== null,
+  );
 
   // Controllers 생성
   const authController = createAuthController(authService, authMiddleware);
@@ -163,6 +166,14 @@ export const createApp = () => {
   app.use("/api/simulations", authMiddleware, simulationController.router);
   app.use("/api/pension-portfolios", authMiddleware, portfolioController.router);
   app.use("/api/diagnoses", authMiddleware, diagnosisController.router);
+
+  // 매칭되지 않은 API 경로는 HTML 대신 JSON 404
+  app.use("/api", (_req, res) => {
+    res.status(404).json({
+      success: false,
+      error: { code: "NOT_FOUND", message: "요청한 API를 찾을 수 없습니다" },
+    });
+  });
 
   // Error middleware (마지막)
   app.use(errorMiddleware);

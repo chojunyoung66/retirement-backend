@@ -1,3 +1,9 @@
+/**
+ * 수동 복구 도구 — 20260729075647_split_pension_fields 실패 기록이 남아
+ * `prisma migrate deploy`가 P3009로 멈출 때만 `npm run migrate:resolve-legacy`로 실행한다.
+ * 배포 시작(npm start)에서는 더 이상 자동 실행하지 않는다.
+ * 인증서 검증을 끄려면(자체 서명 DB 등) PGSSL_REJECT_UNAUTHORIZED=false 를 명시한다.
+ */
 import { execSync } from "node:child_process";
 import pg from "pg";
 
@@ -24,12 +30,12 @@ if (looksInternal) {
   );
 }
 
-// Render Postgres는 SSL 필요
+// Render Postgres는 SSL 필요 — 인증서 검증은 기본 활성
 const pool = new pg.Pool({
   connectionString: databaseUrl,
   ssl: databaseUrl.includes("localhost")
     ? false
-    : { rejectUnauthorized: false },
+    : { rejectUnauthorized: process.env.PGSSL_REJECT_UNAUTHORIZED !== "false" },
 });
 
 async function columnExists(columnName) {

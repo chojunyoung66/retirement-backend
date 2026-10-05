@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ISA_RULES } from "../../application/rules/rule-set.js";
 
 export const healthInsuranceSimulationSchema = z.object({
   pensionIncome: z.number().nonnegative("공적연금소득은 0 이상이어야 합니다"),
@@ -20,7 +21,7 @@ export const isaSimulationSchema = z.object({
   annualContribution: z
     .number()
     .positive("연 납입금은 양수여야 합니다")
-    .max(100000000, "연 납입금은 1억 이하여야 합니다"),
+    .max(ISA_RULES.annualContributionLimit, "ISA 연 납입금은 2천만원 이하여야 합니다"),
   expectedReturnRate: z
     .number()
     .positive("기대수익률은 양수여야 합니다")
@@ -36,7 +37,11 @@ export type IsaSimulationData = z.infer<typeof isaSimulationSchema>;
 
 // 국민연금 시뮬레이션 입력 스키마
 export const nationalPensionSimulationSchema = z.object({
-  monthlyIncome: z.number().positive("월 소득은 양수여야 합니다"),
+  monthlyIncome: z
+    .number()
+    .positive("월 소득은 양수여야 합니다")
+    .max(100_000_000, "월 소득이 너무 큽니다"),
+  // 10년 미만도 허용 — 계산기가 수급 불가(반환일시금) 안내를 반환
   contributionYears: z
     .number()
     .int("가입 기간은 정수여야 합니다")
@@ -78,8 +83,14 @@ export type IrpSimulationData = z.infer<typeof irpSimulationSchema>;
 
 // 퇴직금 시뮬레이션 입력 스키마
 export const severancePaySimulationSchema = z.object({
-  averageMonthlyWage: z.number().positive("평균 월 임금은 양수여야 합니다"),
-  yearsOfService: z.number().positive("근속연수는 양수여야 합니다"),
+  averageMonthlyWage: z
+    .number()
+    .positive("평균 월 임금은 양수여야 합니다")
+    .max(100_000_000, "평균 월 임금이 너무 큽니다"),
+  yearsOfService: z
+    .number()
+    .positive("근속연수는 양수여야 합니다")
+    .max(60, "근속연수는 60년 이하여야 합니다"),
 });
 
 export type SeverancePaySimulationData = z.infer<
@@ -90,8 +101,13 @@ export type SeverancePaySimulationData = z.infer<
 export const unemploymentBenefitSimulationSchema = z.object({
   averageMonthlyWage: z
     .number()
-    .positive("직전 월 평균 임금은 양수여야 합니다"),
-  insuranceYears: z.number().positive("고용보험 가입 기간은 양수여야 합니다"),
+    .positive("직전 월 평균 임금은 양수여야 합니다")
+    .max(100_000_000, "직전 월 평균 임금이 너무 큽니다"),
+  // 피보험 단위기간 180일 미만은 수급 자격 없음
+  insuranceYears: z
+    .number()
+    .min(0.5, "고용보험 가입 기간은 0.5년(180일) 이상이어야 합니다")
+    .max(50, "고용보험 가입 기간은 50년 이하여야 합니다"),
   age: z.number().int("나이는 정수여야 합니다").min(18).max(100),
 });
 

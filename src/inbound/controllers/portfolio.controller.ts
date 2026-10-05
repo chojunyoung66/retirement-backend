@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import type { PortfolioServiceType } from "../../application/services/portfolio.service.js";
 import { BusinessException } from "../../shared/exceptions/business.exception.js";
 import { portfolioDataSchema, portfolioUpdateSchema } from "../schemas/portfolio.schemas.js";
+import { parseIdParam } from "../utils/parse-id.js";
 
 export const createPortfolioController = (portfolioService: PortfolioServiceType) => {
   const router = Router();
@@ -62,12 +63,7 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
         throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
       }
 
-      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-      const portfolioId = parseInt(id, 10);
-
-      if (isNaN(portfolioId)) {
-        throw new BusinessException("INVALID_REQUEST", "유효한 포트폴리오 ID가 아닙니다", 400);
-      }
+      const portfolioId = parseIdParam(req, "유효한 포트폴리오 ID가 아닙니다");
 
       // 소유권 검증은 서비스에서 수행
       const portfolio = await portfolioService.getById(portfolioId, userId);
@@ -89,12 +85,7 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
         throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
       }
 
-      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-      const portfolioId = parseInt(id, 10);
-
-      if (isNaN(portfolioId)) {
-        throw new BusinessException("INVALID_REQUEST", "유효한 포트폴리오 ID가 아닙니다", 400);
-      }
+      const portfolioId = parseIdParam(req, "유효한 포트폴리오 ID가 아닙니다");
 
       // 요청 검증
       const validation = portfolioUpdateSchema.safeParse(req.body);
@@ -122,12 +113,7 @@ export const createPortfolioController = (portfolioService: PortfolioServiceType
         throw new BusinessException("UNAUTHORIZED", "인증이 필요합니다", 401);
       }
 
-      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-      const portfolioId = parseInt(id, 10);
-
-      if (isNaN(portfolioId)) {
-        throw new BusinessException("INVALID_REQUEST", "유효한 포트폴리오 ID가 아닙니다", 400);
-      }
+      const portfolioId = parseIdParam(req, "유효한 포트폴리오 ID가 아닙니다");
 
       const deleted = await portfolioService.delete(portfolioId, userId);
 

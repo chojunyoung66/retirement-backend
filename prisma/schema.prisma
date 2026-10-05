@@ -28,8 +28,6 @@ model User {
 
   diagnosis         Diagnosis?
   simulationResults SimulationResult[]
-  healthSimulations HealthInsuranceSimulation[]
-  isaSimulations    IsaSimulation[]
   portfolios        PensionPortfolio[]
 }
 
@@ -70,33 +68,6 @@ model SimulationResult {
   @@index([userId])
   @@index([userId, type])
   @@index([createdAt])
-}
-
-model HealthInsuranceSimulation {
-  id                      Int      @id @default(autoincrement())
-  userId                  Int
-  monthlyIncome           Int
-  propertyValue           Int
-  carValue                Int
-  estimatedMonthlyPremium Float
-  notice                  String?
-  createdAt               DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model IsaSimulation {
-  id                 Int      @id @default(autoincrement())
-  userId             Int
-  annualContribution Int
-  expectedReturnRate Float
-  investmentYears    Int
-  expectedProfit     Float
-  estimatedTaxSaving Float
-  notice             String?
-  createdAt          DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PensionPortfolio {

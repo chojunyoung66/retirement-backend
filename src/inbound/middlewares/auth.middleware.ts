@@ -7,7 +7,7 @@ import {
   remainingAbsoluteMs,
   resolveSessionStartedAtMs,
 } from "../../shared/session-policy.js";
-import { AUTH_COOKIE_NAME, setAuthCookie } from "../utils/auth-cookie.js";
+import { AUTH_COOKIE_NAME, clearAuthCookie, setAuthCookie } from "../utils/auth-cookie.js";
 
 function extractToken(req: Request): string | null {
   // HttpOnly 쿠키 우선 — 브라우저 세션의 단일 출처
@@ -29,8 +29,11 @@ function extractToken(req: Request): string | null {
   return null;
 }
 
-export const createAuthMiddleware = (jwtUtil: IJwtUtil) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+/** 탈퇴 등으로 사라진 사용자의 유효 JWT를 걸러내기 위한 존재 확인 */
+export type UserExists = (userId: number) => Promise<boolean>;
+
+export const createAuthMiddleware = (jwtUtil: IJwtUtil, userExists?: UserExists) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const endpoint = `${req.method} ${req.path}`;
       const token = extractToken(req);
@@ -57,6 +60,24 @@ export const createAuthMiddleware = (jwtUtil: IJwtUtil) => {
           "세션이 만료되었습니다. 다시 로그인해 주세요",
           401,
         );
+      }
+
+      if (userExists) {
+        let exists: boolean;
+        try {
+          exists = await userExists(userId);
+        } catch (lookupError) {
+          // DB 장애는 토큰 문제가 아니므로 500 경로로 넘김
+          return next(lookupError);
+        }
+        if (!exists) {
+          clearAuthCookie(res);
+          throw new BusinessException(
+            "UNAUTHORIZED",
+            "사용자 정보를 찾을 수 없습니다. 다시 로그인해 주세요",
+            401,
+          );
+        }
       }
 
       // 유휴 슬라이딩 — 요청마다 TTL 갱신 (절대 잔여로 상한)

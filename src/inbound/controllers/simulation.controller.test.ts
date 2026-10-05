@@ -287,7 +287,12 @@ describe("SimulationController", () => {
       expect(mockSimulationService.createNationalPension).toHaveBeenCalledWith(
         1,
         inputBody,
-        expect.any(Object),
+        expect.objectContaining({
+          eligible: true,
+          estimatedMonthlyPension: 966_628,
+          pensionStartAge: 65,
+          ruleVersion: expect.any(String),
+        }),
       );
     });
 
@@ -433,7 +438,13 @@ describe("SimulationController", () => {
       expect(mockSimulationService.createSeverancePay).toHaveBeenCalledWith(
         1,
         inputBody,
-        expect.any(Object),
+        expect.objectContaining({
+          severancePay: 90_000_000,
+          incomeTax: 880_000,
+          localIncomeTax: 88_000,
+          afterTaxAmount: 89_032_000,
+          ruleVersion: expect.any(String),
+        }),
       );
     });
 
@@ -663,6 +674,19 @@ describe("SimulationController", () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe("INVALID_REQUEST");
     });
+
+    it.each(["12abc", "-1", "99999999999"])(
+      "부분 숫자·음수·범위 초과 ID(%s)는 400",
+      async (rawId) => {
+        const response = await request(app)
+          .get(`/simulations/${rawId}`)
+          .set("Authorization", "Bearer valid_token");
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe("INVALID_REQUEST");
+        expect(mockSimulationService.getSimulationById).not.toHaveBeenCalled();
+      },
+    );
 
     it("존재하지 않는 시뮬레이션은 404 반환", async () => {
       const notFoundError = new BusinessException(

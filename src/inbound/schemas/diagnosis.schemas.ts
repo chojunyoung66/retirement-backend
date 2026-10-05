@@ -1,6 +1,14 @@
 import { z } from "zod";
 
-export const diagnosisDataSchema = z
+// 원 단위 금액: 0 이상 정수, 상한 지정
+const wonAmount = (label: string, max: number) =>
+  z
+    .number()
+    .int(`${label}은(는) 원 단위 정수여야 합니다`)
+    .nonnegative(`${label}은(는) 0 이상이어야 합니다`)
+    .max(max, `${label}이(가) 너무 큽니다`);
+
+const diagnosisObjectSchema = z
   .object({
     householdType: z.enum(["individual", "couple"], {
       error: "가구 유형은 individual 또는 couple 이어야 합니다",
@@ -37,37 +45,13 @@ export const diagnosisDataSchema = z
       .nullable()
       .optional()
       .default(null),
-    nationalPension: z
-      .number()
-      .nonnegative("국민연금은 0 이상이어야 합니다")
-      .max(100_000_000, "국민연금이 너무 큽니다"),
-    retirementPension: z
-      .number()
-      .nonnegative("퇴직연금은 0 이상이어야 합니다")
-      .max(100_000_000, "퇴직연금이 너무 큽니다"),
-    personalPension: z
-      .number()
-      .nonnegative("개인연금은 0 이상이어야 합니다")
-      .max(100_000_000, "개인연금이 너무 큽니다"),
-    housingPension: z
-      .number()
-      .nonnegative("주택연금은 0 이상이어야 합니다")
-      .max(100_000_000, "주택연금이 너무 큽니다")
-      .default(0),
-    monthlyExpense: z
-      .number()
-      .nonnegative("월 지출은 0 이상이어야 합니다")
-      .max(100_000_000, "월 지출이 너무 큽니다"),
-    healthInsurance: z
-      .number()
-      .nonnegative("건강보험료는 0 이상이어야 합니다")
-      .max(10_000_000, "건강보험료가 너무 큽니다")
-      .default(0),
-    privateInsurance: z
-      .number()
-      .nonnegative("민영보험료는 0 이상이어야 합니다")
-      .max(10_000_000, "민영보험료가 너무 큽니다")
-      .default(0),
+    nationalPension: wonAmount("국민연금", 100_000_000),
+    retirementPension: wonAmount("퇴직연금", 100_000_000),
+    personalPension: wonAmount("개인연금", 100_000_000),
+    housingPension: wonAmount("주택연금", 100_000_000).default(0),
+    monthlyExpense: wonAmount("월 지출", 100_000_000),
+    healthInsurance: wonAmount("건강보험료", 10_000_000).default(0),
+    privateInsurance: wonAmount("민영보험료", 10_000_000).default(0),
   })
   .refine((data) => data.retirementYear > data.birthYear, {
     message: "은퇴 예정 연도는 출생 연도보다 커야 합니다",
@@ -85,5 +69,18 @@ export const diagnosisDataSchema = z
       path: ["spouseRetirementYear"],
     },
   );
+
+// 개인 가구는 남아 있는 배우자 값을 검증·저장하지 않도록 먼저 비움
+const dropSpouseForIndividual = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object") return raw;
+  const body = raw as Record<string, unknown>;
+  if (body.householdType !== "individual") return raw;
+  return { ...body, spouseBirthYear: null, spouseRetirementYear: null };
+};
+
+export const diagnosisDataSchema = z.preprocess(
+  dropSpouseForIndividual,
+  diagnosisObjectSchema,
+);
 
 export type DiagnosisDataInput = z.infer<typeof diagnosisDataSchema>;

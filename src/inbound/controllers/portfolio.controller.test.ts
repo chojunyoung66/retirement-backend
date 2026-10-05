@@ -181,6 +181,19 @@ describe("PortfolioController", () => {
       expect(response.body.error.code).toBe("INVALID_REQUEST");
     });
 
+    it.each(["abc", "12abc", "1.5", "-1", "0", "99999999999"])(
+      "형식이 맞지 않거나 범위를 넘는 ID(%s)는 서비스 호출 없이 400",
+      async (rawId) => {
+        const response = await request(app)
+          .get(`/portfolios/${rawId}`)
+          .set("Authorization", "Bearer valid_token");
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe("INVALID_REQUEST");
+        expect(mockPortfolioService.getById).not.toHaveBeenCalled();
+      },
+    );
+
     it("존재하지 않는 포트폴리오는 404 반환", async () => {
       // given
       const notFoundError = new BusinessException(
@@ -230,6 +243,49 @@ describe("PortfolioController", () => {
       expect(response.body.success).toBe(true);
       expect(response.body.data.name).toBe("변경된 포트폴리오");
       expect(mockPortfolioService.update).toHaveBeenCalledWith(1, 1, updateData);
+    });
+
+    it("계좌 유형 변경을 서비스에 전달한다", async () => {
+      const updateData = {
+        accountType: "ISA",
+        name: "변경된 포트폴리오",
+        items: [{ symbol: "BOND", name: "채권 ETF", allocation: 100 }],
+      };
+      (mockPortfolioService.update as jest.Mock).mockResolvedValueOnce({
+        id: 1,
+        userId: 1,
+        ...updateData,
+      });
+
+      const response = await request(app)
+        .patch("/portfolios/1")
+        .set("Authorization", "Bearer valid_token")
+        .send(updateData);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.accountType).toBe("ISA");
+      expect(mockPortfolioService.update).toHaveBeenCalledWith(1, 1, updateData);
+    });
+
+    it("허용되지 않은 계좌 유형은 검증 실패", async () => {
+      const response = await request(app)
+        .patch("/portfolios/1")
+        .set("Authorization", "Bearer valid_token")
+        .send({ accountType: "주식계좌" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_UPDATE");
+      expect(mockPortfolioService.update).not.toHaveBeenCalled();
+    });
+
+    it("범위를 넘는 ID는 400", async () => {
+      const response = await request(app)
+        .patch("/portfolios/99999999999")
+        .set("Authorization", "Bearer valid_token")
+        .send({ name: "x" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe("INVALID_REQUEST");
     });
 
     it("빈 업데이트는 검증 실패", async () => {
