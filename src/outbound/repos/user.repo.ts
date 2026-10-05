@@ -87,6 +87,9 @@ export const createUserRepo = (): IUserRepo => ({
       await tx.simulationResult.deleteMany({ where: { userId: id } });
       await tx.diagnosis.deleteMany({ where: { userId: id } });
       await tx.pensionPortfolio.deleteMany({ where: { userId: id } });
+      await tx.reportSnapshot.deleteMany({ where: { userId: id } });
+      await tx.accountAsset.deleteMany({ where: { userId: id } });
+      await tx.withdrawalScenarioSet.deleteMany({ where: { userId: id } });
       await tx.user.delete({ where: { id } });
     });
   },

@@ -33,7 +33,7 @@ const countedFinancialIncome = (amount: number): number =>
   // 금융소득은 기준 이하면 제외, 초과하면 전액 반영
   amount > R.financialIncomeExclusion ? amount : 0;
 
-const isDependentLikely = (input: HealthInsuranceInput): boolean => {
+export const isDependentLikely = (input: HealthInsuranceInput): boolean => {
   const d = R.dependent;
   // 소득요건: 합산소득 한도와 사업소득 한도
   const totalIncome =

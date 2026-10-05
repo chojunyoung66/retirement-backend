@@ -42,21 +42,28 @@ const basicTaxOf = (taxBase: number): number => {
   return taxBase * row.rate - row.progressiveDeduction;
 };
 
-export const calculateSeverancePay = (
-  input: SeverancePayInput,
-): SeverancePayOutput => {
-  const { averageMonthlyWage, yearsOfService } = input;
+export interface RetirementIncomeTax {
+  taxYears: number;
+  serviceDeduction: number;
+  convertedPay: number;
+  convertedPayDeduction: number;
+  taxBase: number;
+  incomeTax: number;
+  localIncomeTax: number;
+  totalTax: number;
+}
 
-  // 법정 퇴직금: 평균월임금 × 근속연수
-  const severancePay = Math.round(averageMonthlyWage * yearsOfService);
-
+export const calculateRetirementIncomeTax = (
+  retirementIncome: number,
+  yearsOfService: number,
+): RetirementIncomeTax => {
   // 세법상 근속연수는 1년 미만 끝수를 1년으로 올림
   const taxYears = Math.max(1, Math.ceil(yearsOfService));
   const serviceDeduction = serviceDeductionOf(taxYears);
 
   // 환산급여 → 환산급여공제 → 과세표준
   const convertedPay =
-    (Math.max(0, severancePay - serviceDeduction) * 12) / taxYears;
+    (Math.max(0, retirementIncome - serviceDeduction) * 12) / taxYears;
   const convertedPayDeduction = Math.min(
     convertedPay,
     convertedPayDeductionOf(convertedPay),
@@ -66,10 +73,8 @@ export const calculateSeverancePay = (
   // 환산산출세액을 근속연수로 되돌려 퇴직소득세 산정
   const incomeTax = Math.round((basicTaxOf(taxBase) * taxYears) / 12);
   const localIncomeTax = Math.round(incomeTax * R.localIncomeTaxRate);
-  const totalTax = incomeTax + localIncomeTax;
 
   return {
-    severancePay,
     taxYears,
     serviceDeduction: Math.round(serviceDeduction),
     convertedPay: Math.round(convertedPay),
@@ -77,8 +82,23 @@ export const calculateSeverancePay = (
     taxBase: Math.round(taxBase),
     incomeTax,
     localIncomeTax,
-    totalTax,
-    afterTaxAmount: severancePay - totalTax,
+    totalTax: incomeTax + localIncomeTax,
+  };
+};
+
+export const calculateSeverancePay = (
+  input: SeverancePayInput,
+): SeverancePayOutput => {
+  const { averageMonthlyWage, yearsOfService } = input;
+
+  // 법정 퇴직금: 평균월임금 × 근속연수
+  const severancePay = Math.round(averageMonthlyWage * yearsOfService);
+  const tax = calculateRetirementIncomeTax(severancePay, yearsOfService);
+
+  return {
+    severancePay,
+    ...tax,
+    afterTaxAmount: severancePay - tax.totalTax,
     notice: `근속 ${yearsOfService}년 기준 법정 퇴직금과 퇴직소득세(지방소득세 포함) 추정치입니다. 실제 세액은 원천징수영수증 또는 세무 전문가를 통해 확인하세요.`,
     ruleVersion: RULE_SET_VERSION,
   };

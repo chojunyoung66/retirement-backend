@@ -26,9 +26,28 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  diagnosis         Diagnosis?
-  simulationResults SimulationResult[]
-  portfolios        PensionPortfolio[]
+  diagnosis              Diagnosis?
+  simulationResults      SimulationResult[]
+  portfolios             PensionPortfolio[]
+  accountAssets          AccountAsset[]
+  withdrawalScenarioSets WithdrawalScenarioSet[]
+  reportSnapshots        ReportSnapshot[]
+}
+
+enum AccountAssetType {
+  DC
+  PENSION_SAVINGS
+  IRP
+  ISA
+  BROKERAGE
+  CASH
+}
+
+enum IrpSource {
+  PERSONAL
+  SEVERANCE
+  MIXED
+  UNKNOWN
 }
 
 model Diagnosis {
@@ -91,4 +110,59 @@ model PensionPortfolioItem {
   createdAt   DateTime @default(now())
 
   portfolio PensionPortfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+}
+
+// 계좌별 자산 — 계좌번호는 저장하지 않는다. 과세구분 합계를 뺀 나머지는 미확인 금액으로 본다.
+model AccountAsset {
+  id                       Int              @id @default(autoincrement())
+  userId                   Int
+  accountType              AccountAssetType
+  accountName              String?
+  institution              String?
+  balance                  Int
+  principalTaxCredited     Int              @default(0)
+  principalNonDeductible   Int              @default(0)
+  investmentGain           Int              @default(0)
+  deferredRetirementIncome Int              @default(0)
+  irpSource                IrpSource?
+  pensionSavingsLegacy     Boolean?
+  isaMaturityYm            String?
+  verifiedAt               DateTime?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model WithdrawalScenarioSet {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  ruleVersion  String
+  input        Json
+  result       Json
+  selectedType String?
+  createdAt    DateTime @default(now())
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports ReportSnapshot[]
+
+  @@index([userId, createdAt])
+}
+
+// 실행계획 리포트 — 생성 시점의 시나리오 결과를 고정한다. 세트가 정리돼도 리포트는 남는다.
+model ReportSnapshot {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  scenarioSetId Int?
+  scenarioType  String
+  ruleVersion   String
+  content       Json
+  generatedAt   DateTime @default(now())
+
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenarioSet WithdrawalScenarioSet? @relation(fields: [scenarioSetId], references: [id], onDelete: SetNull)
+
+  @@index([userId, generatedAt])
 }

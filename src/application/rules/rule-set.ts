@@ -1,7 +1,7 @@
 /**
  * 제도 수치 단일 정본 — 값 변경 시 RULE_SET_VERSION과 계산기 테스트 정답값을 함께 갱신한다.
  */
-export const RULE_SET_VERSION = "KR-2026.07";
+export const RULE_SET_VERSION = "KR-2026.10";
 
 export interface RuleMeta {
   effectiveDate: string;
@@ -151,6 +151,42 @@ export const ISA_RULES = {
   taxFreeLimitGeneral: 2_000_000,
   generalTaxRate: 0.154,
   separateTaxRate: 0.099,
+  // 만기 후 60일 이내 연금계좌 전환 시 전환액의 10%(최대 300만원)를 세액공제 대상 납입액에 추가
+  pensionTransfer: {
+    effectiveDate: "2020-01-01",
+    source: "소득세법 제59조의3 제3항, 시행령 제118조의2",
+    creditBaseRate: 0.1,
+    maxExtraCreditBase: 3_000_000,
+    // 이 금액을 넘는 전환분은 추가 공제 효과가 없음
+    fullEffectTransferAmount: 30_000_000,
+    deadlineDays: 60,
+  },
+} as const;
+
+export const PENSION_INCOME_TAX_RULES = {
+  meta: {
+    effectiveDate: "2026-01-01",
+    source: "소득세법 제129조 제1항 제5호의2·5호의3, 제14조 제3항 제9호(사적연금 1,500만원), 국세청 연금소득 안내(2026.1.1 이후 연금수령분)",
+  } satisfies RuleMeta,
+  // 연금수령 최소 연령
+  annuityMinAge: 55,
+  // 세액공제 원금·운용수익 연금수령 원천징수세율(지방소득세 포함), 나이 하한 내림차순
+  privatePensionRateByAge: [
+    { fromAge: 80, rate: 0.033 },
+    { fromAge: 70, rate: 0.044 },
+    { fromAge: 0, rate: 0.055 },
+  ],
+  // 이연퇴직소득·의료목적 인출 외 사적연금 연 합계가 이 금액을 넘으면 종합과세 또는 16.5% 분리과세
+  separateTaxThreshold: 15_000_000,
+  overThresholdSeparateRate: 0.165,
+  // 연금외수령(일시 인출) 기타소득세(지방소득세 포함)
+  nonAnnuityOtherIncomeRate: 0.165,
+  // 이연퇴직소득 연금수령: 퇴직소득세(연금외수령 세율) 대비 적용 비율, 실제 수령연차 기준
+  deferredRetirementRatioByYear: [
+    { upToYear: 10, ratio: 0.7 },
+    { upToYear: 20, ratio: 0.6 },
+    { upToYear: Infinity, ratio: 0.5 },
+  ],
 } as const;
 
 export const IRP_RULES = {

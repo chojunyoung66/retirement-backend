@@ -9,6 +9,9 @@ import { createUserRepo } from "./outbound/repos/user.repo.js";
 import { createSimulationRepo } from "./outbound/repos/simulation.repo.js";
 import { createPortfolioRepo } from "./outbound/repos/portfolio.repo.js";
 import { createDiagnosisRepo } from "./outbound/repos/diagnosis.repo.js";
+import { createAccountAssetRepo } from "./outbound/repos/account-asset.repo.js";
+import { createWithdrawalScenarioRepo } from "./outbound/repos/withdrawal-scenario.repo.js";
+import { createReportRepo } from "./outbound/repos/report.repo.js";
 
 // Services
 import { createAuthService } from "./application/services/auth.service.js";
@@ -16,6 +19,10 @@ import { createUserService } from "./application/services/user.service.js";
 import { createSimulationService } from "./application/services/simulation.service.js";
 import { createPortfolioService } from "./application/services/portfolio.service.js";
 import { createDiagnosisService } from "./application/services/diagnosis.service.js";
+import { createAccountAssetService } from "./application/services/account-asset.service.js";
+import { createWithdrawalScenarioService } from "./application/services/withdrawal-scenario.service.js";
+import { createReportService } from "./application/services/report.service.js";
+import { createPdfRenderer } from "./application/services/report/pdf-renderer.js";
 
 // Controllers
 import { createAuthController } from "./inbound/controllers/auth.controller.js";
@@ -23,6 +30,9 @@ import { createUserController } from "./inbound/controllers/user.controller.js";
 import { createSimulationController } from "./inbound/controllers/simulation.controller.js";
 import { createPortfolioController } from "./inbound/controllers/portfolio.controller.js";
 import { createDiagnosisController } from "./inbound/controllers/diagnosis.controller.js";
+import { createAccountAssetController } from "./inbound/controllers/account-asset.controller.js";
+import { createWithdrawalScenarioController } from "./inbound/controllers/withdrawal-scenario.controller.js";
+import { createReportController } from "./inbound/controllers/report.controller.js";
 
 // Middlewares
 import { createAuthMiddleware } from "./inbound/middlewares/auth.middleware.js";
@@ -131,6 +141,9 @@ export const createApp = () => {
   const simulationRepo = createSimulationRepo();
   const portfolioRepo = createPortfolioRepo();
   const diagnosisRepo = createDiagnosisRepo();
+  const accountAssetRepo = createAccountAssetRepo();
+  const scenarioRepo = createWithdrawalScenarioRepo();
+  const reportRepo = createReportRepo();
 
   // Services 생성
   const authService = createAuthService(
@@ -143,6 +156,18 @@ export const createApp = () => {
   const simulationService = createSimulationService(simulationRepo);
   const portfolioService = createPortfolioService(portfolioRepo);
   const diagnosisService = createDiagnosisService(diagnosisRepo);
+  const accountAssetService = createAccountAssetService(accountAssetRepo);
+  const withdrawalScenarioService = createWithdrawalScenarioService({
+    accountAssetRepo,
+    diagnosisRepo,
+    simulationRepo,
+    scenarioRepo,
+  });
+  const reportService = createReportService({
+    reportRepo,
+    scenarioRepo,
+    renderPdf: createPdfRenderer(),
+  });
 
   // Auth middleware 생성
   const authMiddleware = createAuthMiddleware(
@@ -156,6 +181,11 @@ export const createApp = () => {
   const simulationController = createSimulationController(simulationService);
   const portfolioController = createPortfolioController(portfolioService);
   const diagnosisController = createDiagnosisController(diagnosisService);
+  const accountAssetController = createAccountAssetController(accountAssetService);
+  const withdrawalScenarioController = createWithdrawalScenarioController(
+    withdrawalScenarioService,
+  );
+  const reportController = createReportController(reportService);
 
   // Public routes (인증 불필요)
   app.use("/health", healthLimiter, healthRouter);
@@ -166,6 +196,13 @@ export const createApp = () => {
   app.use("/api/simulations", authMiddleware, simulationController.router);
   app.use("/api/pension-portfolios", authMiddleware, portfolioController.router);
   app.use("/api/diagnoses", authMiddleware, diagnosisController.router);
+  app.use("/api/account-assets", authMiddleware, accountAssetController.router);
+  app.use(
+    "/api/withdrawal-scenarios",
+    authMiddleware,
+    withdrawalScenarioController.router,
+  );
+  app.use("/api/reports", authMiddleware, reportController.router);
 
   // 매칭되지 않은 API 경로는 HTML 대신 JSON 404
   app.use("/api", (_req, res) => {
