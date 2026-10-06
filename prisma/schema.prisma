@@ -25,6 +25,8 @@ model User {
   profileImage String?
   // 계좌 잔액·과세구분 상세 저장 동의 시각 — 첫 계좌 저장 시 기록
   detailDataConsentAt DateTime?
+  // USER | OPERATOR — 운영자 지정은 scripts/grant-operator.ts로만 한다
+  role         String   @default("USER")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -34,6 +36,9 @@ model User {
   accountAssets          AccountAsset[]
   withdrawalScenarioSets WithdrawalScenarioSet[]
   reportSnapshots        ReportSnapshot[]
+  payments               Payment[]
+  reviewRequests         ReviewRequest[]
+  executionPlans         ExecutionPlan[]
 }
 
 enum AccountAssetType {
@@ -162,10 +167,101 @@ model ReportSnapshot {
   scenarioType  String
   ruleVersion   String
   content       Json
+  title         String?
+  // 환불 판단용 — PDF·엑셀을 처음 받은 시각
+  firstDownloadedAt DateTime?
   generatedAt   DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
 
-  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  scenarioSet WithdrawalScenarioSet? @relation(fields: [scenarioSetId], references: [id], onDelete: SetNull)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenarioSet    WithdrawalScenarioSet? @relation(fields: [scenarioSetId], references: [id], onDelete: SetNull)
+  payment        Payment?
+  reviewRequests ReviewRequest[]
+  executionPlan  ExecutionPlan?
 
   @@index([userId, generatedAt])
+}
+
+enum PaymentStatus {
+  READY
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
+}
+
+// 주문과 결제를 함께 담는다. 거래 기록 보관 의무 때문에 사용자·리포트가 지워져도 남긴다.
+model Payment {
+  id            Int           @id @default(autoincrement())
+  orderId       String        @unique
+  userId        Int?
+  product       String        @default("REPORT")
+  amount        Int
+  status        PaymentStatus @default(READY)
+  scenarioSetId Int?
+  scenarioType  String
+  paymentKey    String?       @unique
+  method        String?
+  approvedAt    DateTime?
+  canceledAt    DateTime?
+  cancelReason  String?
+  receiptUrl    String?
+  failureCode   String?
+  // 결제로 리포트를 만든 시각 — 리포트를 지워도 같은 주문으로 다시 만들 수 없다
+  consumedAt    DateTime?
+  reportId      Int?          @unique
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  user   User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  report ReportSnapshot? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+enum ReviewStatus {
+  REQUESTED
+  IN_REVIEW
+  ANSWERED
+  CLOSED
+  CANCELED
+}
+
+// 전문가 검토 요청 — 운영자는 동의받은 리포트 스냅샷만 본다
+model ReviewRequest {
+  id           Int          @id @default(autoincrement())
+  userId       Int
+  reportId     Int
+  question     String
+  consentAt    DateTime
+  status       ReviewStatus @default(REQUESTED)
+  answer       String?
+  answeredAt   DateTime?
+  operatorNote String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report ReportSnapshot @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([reportId])
+}
+
+// 리포트 기준 100일 실행 체크리스트
+model ExecutionPlan {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  reportId  Int      @unique
+  startDate DateTime
+  items     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report ReportSnapshot @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

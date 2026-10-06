@@ -4,11 +4,13 @@ import type {
   BasisDate,
   EngineAssumptions,
   IsaStrategy,
+  MonthlySeries,
   PlanItem,
   ScenarioResult,
   ScenarioSetResult,
   ScenarioSummary,
   ScenarioType,
+  ValueSource,
 } from "../withdrawal/types.js";
 
 export const REPORT_TITLE = "은퇴현금 실행계획 리포트";
@@ -20,6 +22,13 @@ export const ACTION_LABEL: Record<ActionType, string> = {
   AS_NEEDED: "필요할 때 인출",
   HOLD: "보유",
   INCOME: "수입",
+};
+
+export const VALUE_SOURCE_LABEL: Record<ValueSource, string> = {
+  request: "직접 입력",
+  simulation: "계산기 결과",
+  default: "기본값",
+  none: "없음",
 };
 
 export interface ReportNextAction {
@@ -51,7 +60,8 @@ export interface ReportContent {
   inputSummary: ScenarioSetResult["inputSummary"];
   nextActions: ReportNextAction[];
   comparison: ReportComparisonRow[];
-  scenario: Omit<ScenarioResult, "monthly">;
+  /** 월별 배열은 월별 현금흐름 표·엑셀용 — 고도화 이전 리포트에는 없다 */
+  scenario: Omit<ScenarioResult, "monthly"> & { monthly?: MonthlySeries };
   accountChecks: AccountCheck[];
   isaStrategy: IsaStrategy[];
   disclaimers: string[];
@@ -76,16 +86,13 @@ export const pickNextActions = (
       monthlyNet: item.monthlyNet,
     }));
 
-const withoutMonthly = ({ monthly: _monthly, ...rest }: ScenarioResult) => rest;
-
 export const buildReportContent = (
   result: ScenarioSetResult,
   type: ScenarioType,
   generatedAt: Date,
 ): ReportContent | null => {
-  const selected = result.scenarios.find((s) => s.type === type);
-  if (!selected) return null;
-  const scenario = withoutMonthly(selected);
+  const scenario = result.scenarios.find((s) => s.type === type);
+  if (!scenario) return null;
   return {
     title: REPORT_TITLE,
     generatedAt: generatedAt.toISOString(),

@@ -25,7 +25,7 @@ describe("buildReportContent", () => {
   const set = sampleScenarioSet();
   const generatedAt = new Date("2026-10-06T01:00:00.000Z");
 
-  it("선택한 시나리오를 월별 배열 없이 고정하고 A~D 비교를 함께 담는다", () => {
+  it("선택한 시나리오를 월별 배열까지 고정하고 A~D 비교를 함께 담는다", () => {
     const content = buildReportContent(set, "D", generatedAt);
     expect(content).not.toBeNull();
     expect(content!.title).toBe(REPORT_TITLE);
@@ -33,7 +33,8 @@ describe("buildReportContent", () => {
     expect(content!.ruleVersion).toBe(set.ruleVersion);
     expect(content!.basisDates.length).toBeGreaterThan(0);
     expect(content!.scenario.type).toBe("D");
-    expect("monthly" in content!.scenario).toBe(false);
+    const selected = set.scenarios.find((s) => s.type === "D")!;
+    expect(content!.scenario.monthly?.ym).toEqual(selected.monthly.ym);
     expect(content!.comparison.map((row) => row.type)).toEqual(["A", "B", "C", "D"]);
     expect(content!.nextActions.length).toBeGreaterThan(0);
     expect(content!.nextActions.length).toBeLessThanOrEqual(3);

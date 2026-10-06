@@ -1,4 +1,7 @@
-import type { IUserRepo } from "../../application/contracts/user-repo.contract.js";
+import {
+  toUserRole,
+  type IUserRepo,
+} from "../../application/contracts/user-repo.contract.js";
 import { prisma } from "./prisma-client.js";
 
 const toAuthRecord = (user: {
@@ -8,6 +11,7 @@ const toAuthRecord = (user: {
   name: string;
   googleSub: string | null;
   profileImage: string | null;
+  role: string;
 }) => ({
   id: user.id,
   email: user.email,
@@ -15,6 +19,7 @@ const toAuthRecord = (user: {
   name: user.name,
   googleSub: user.googleSub,
   profileImage: user.profileImage,
+  role: toUserRole(user.role),
 });
 
 export const createUserRepo = (): IUserRepo => ({
@@ -39,6 +44,7 @@ export const createUserRepo = (): IUserRepo => ({
           email: user.email,
           name: user.name,
           profileImage: user.profileImage,
+          role: toUserRole(user.role),
         }
       : null;
   },
@@ -87,6 +93,10 @@ export const createUserRepo = (): IUserRepo => ({
       await tx.simulationResult.deleteMany({ where: { userId: id } });
       await tx.diagnosis.deleteMany({ where: { userId: id } });
       await tx.pensionPortfolio.deleteMany({ where: { userId: id } });
+      await tx.reviewRequest.deleteMany({ where: { userId: id } });
+      await tx.executionPlan.deleteMany({ where: { userId: id } });
+      // 결제 기록은 보관 의무가 있어 지우지 않고 사용자 연결만 끊는다
+      await tx.payment.updateMany({ where: { userId: id }, data: { userId: null } });
       await tx.reportSnapshot.deleteMany({ where: { userId: id } });
       await tx.accountAsset.deleteMany({ where: { userId: id } });
       await tx.withdrawalScenarioSet.deleteMany({ where: { userId: id } });

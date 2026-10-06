@@ -50,8 +50,23 @@ describe("UserService", () => {
         email: "test@example.com",
         name: "테스트유저",
         hasPassword: true,
+        role: "USER",
       });
       expect(result).not.toHaveProperty("password");
+    });
+
+    it("운영자 역할을 함께 돌려준다", async () => {
+      (mockUserRepo.findAuthById as jest.Mock).mockResolvedValueOnce({
+        id: 2,
+        email: "op@example.com",
+        password: null,
+        name: "운영자",
+        googleSub: "g",
+        profileImage: null,
+        role: "OPERATOR",
+      });
+      const result = await userService.getProfile(2);
+      expect(result.role).toBe("OPERATOR");
     });
 
     it("존재하지 않는 userId로 조회 시 USER_NOT_FOUND 예외 발생", async () => {

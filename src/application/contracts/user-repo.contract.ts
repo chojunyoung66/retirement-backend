@@ -5,7 +5,13 @@ export interface UserAuthRecord {
   name: string;
   googleSub: string | null;
   profileImage: string | null;
+  role?: UserRole;
 }
+
+export type UserRole = "USER" | "OPERATOR";
+
+export const toUserRole = (value: string | null | undefined): UserRole =>
+  value === "OPERATOR" ? "OPERATOR" : "USER";
 
 export interface IUserRepo {
   // password는 Google 전용 사용자의 경우 null
@@ -18,6 +24,7 @@ export interface IUserRepo {
     email: string;
     name: string;
     profileImage: string | null;
+    role: UserRole;
   } | null>;
   /** 탈퇴 재인증용 — password 포함 */
   findAuthById(id: number): Promise<UserAuthRecord | null>;

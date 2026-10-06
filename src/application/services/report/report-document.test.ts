@@ -1,6 +1,12 @@
 import type { ContentTable } from "pdfmake/interfaces.js";
 import { buildReportContent, type ReportContent } from "./report-content.js";
-import { buildReportDoc, formatWan, formatYm, REPORT_FONT } from "./report-document.js";
+import {
+  buildReportDoc,
+  formatWan,
+  formatYm,
+  MONTHLY_DETAIL_MONTHS,
+  REPORT_FONT,
+} from "./report-document.js";
 import { createPdfRenderer } from "./pdf-renderer.js";
 import { sampleScenarioSet } from "./report.fixture.js";
 
@@ -50,13 +56,46 @@ describe("buildReportDoc", () => {
     }
   });
 
-  it("연도별 표는 머리행을 페이지마다 반복하고 모든 연도를 담는다", () => {
-    const yearly = (doc.content as ContentTable[]).find(
-      (block) => block?.table?.widths?.length === 8,
-    );
+  const blocks = doc.content as (ContentTable & { text?: string; pageOrientation?: string })[];
+  const tableWithHeader = (header: string) =>
+    blocks.find((block) => JSON.stringify(block?.table?.body?.[0] ?? "").includes(header));
+
+  it("연도별 표는 가로 페이지에서 머리행을 반복하고 모든 연도와 수입 열을 담는다", () => {
+    const heading = blocks.find((block) => block.text === "연도별 현금흐름 (연간 합계)");
+    expect(heading?.pageOrientation).toBe("landscape");
+    const yearly = tableWithHeader("연말 잔액");
     expect(yearly?.table.headerRows).toBe(1);
-    expect(JSON.stringify(yearly?.table.body[0])).toContain("건보료");
+    const header = JSON.stringify(yearly?.table.body[0]);
+    for (const column of ["건보료", "국민연금", "실업급여", "세전 인출", "세후 인출"]) {
+      expect(header).toContain(column);
+    }
+    // 배우자 연금이 없는 페르소나라 열을 뺀다
+    expect(header).not.toContain("배우자 연금");
     expect(yearly?.table.body.length).toBe(content.scenario.yearly.length + 1);
+  });
+
+  it("입력·가정과 피부양자 판단 근거를 담는다", () => {
+    expect(text).toContain("입력·가정");
+    expect(text).toContain("물가 상승률");
+    expect(text).toContain("피부양자 판단 근거");
+  });
+
+  it("월별 상세는 처음 24개월만 세로 페이지로 싣는다", () => {
+    const monthly = tableWithHeader("연월");
+    expect(monthly?.table.body.length).toBe(MONTHLY_DETAIL_MONTHS + 1);
+    const heading = blocks.find((block) => String(block.text ?? "").startsWith("월별 현금흐름"));
+    expect(heading?.pageOrientation).toBe("portrait");
+  });
+
+  it("100일 실행 체크리스트를 담고, 월별 값이 없는 예전 리포트는 여기서 세로로 되돌린다", () => {
+    expect(text).toContain("100일 실행 체크리스트");
+    expect(text).toContain("D+100");
+    const { monthly: _monthly, ...scenario } = content.scenario;
+    const legacy = buildReportDoc({ ...content, scenario }).content as typeof blocks;
+    expect(legacy.find((block) => block.text === "100일 실행 체크리스트")?.pageOrientation).toBe(
+      "portrait",
+    );
+    expect(JSON.stringify(legacy)).not.toContain("월별 현금흐름 (처음");
   });
 
   it("재산을 입력하지 않았으면 피부양자 기간을 숫자로 쓰지 않는다", () => {

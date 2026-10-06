@@ -143,14 +143,21 @@ src/
 ### 실행계획 리포트
 | Method | Path | 설명 |
 |--------|------|------|
-| POST | `/api/reports` | `{ scenarioSetId, scenarioType }`로 리포트 스냅샷 생성 (201) |
-| GET | `/api/reports` | 내 리포트 목록 (본문 없음, 최신순) |
-| GET/DELETE | `/api/reports/:id` | 스냅샷 본문 조회 · 삭제 |
+| POST | `/api/reports` | `{ scenarioSetId, scenarioType, orderId? }`로 리포트 스냅샷 생성 (201) |
+| GET | `/api/reports` | 내 리포트 목록 (본문 없음, 최신순, `title`·`firstDownloadedAt`·`isOutdated` 포함) |
+| GET/DELETE | `/api/reports/:id` | 스냅샷 본문 조회 · 삭제 (검토 요청·100일 계획도 함께 삭제) |
+| PATCH | `/api/reports/:id` | 이름 변경 `{ title }` (1~40자, `null`·빈 값이면 기본 이름) |
 | GET | `/api/reports/:id/pdf` | 서버 생성 PDF (`retirement-plan-<id>.pdf`, `Cache-Control: no-store`) |
+| GET | `/api/reports/:id/xlsx` | 서버 생성 엑셀 (시트 7개, UTF-8 파일명, `no-store`) |
 
 - 생성 시점의 시나리오 결과를 `ReportSnapshot.content`(JSON)로 고정합니다. 비교표(A~D 요약)·"지금 할 일"
-  (보유 제외, 시작월·우선순위 순 최대 3건)도 서버에서 계산해 저장하므로 화면과 PDF가 같습니다.
-  월별 배열은 저장하지 않습니다. 유저당 최근 10건만 보관합니다.
+  (보유 제외, 시작월·우선순위 순 최대 3건)·월별 시계열(`scenario.monthly`, v1.1 이후 리포트)도 서버에서 계산해
+  저장하므로 화면·PDF·엑셀이 같습니다. 유저당 최대 50건이며 넘으면 `REPORT_LIMIT`(409)입니다(자동 삭제 없음).
+- `isOutdated`는 `ruleVersion`이 현재 규칙 버전과 다르거나 만든 지 180일이 지나면 true입니다.
+- PDF·엑셀을 처음 받을 때 `firstDownloadedAt`을 기록합니다(환불 판단용, 인쇄는 기록하지 않음).
+- `REPORT_PAYMENT_ENABLED=true`이면 결제 완료·미사용 `orderId`가 있어야 생성됩니다. 없으면
+  `PAYMENT_REQUIRED`(402), 다른 실행안의 주문은 `PAYMENT_ORDER_MISMATCH`(400)입니다. 결제한 리포트를 지워도
+  같은 주문으로 다시 만들 수 없습니다.
 - 원본 시나리오 세트가 지워져도 리포트는 남고(`scenarioSetId`가 `null`), 계좌 정보 전체 삭제와도
   무관합니다. 회원 탈퇴 시에는 함께 삭제됩니다. 남의 리포트는 `REPORT_FORBIDDEN`(403)입니다.
 - PDF는 요청마다 `pdfmake`로 만들고 파일로 저장하지 않습니다(`src/application/services/report/`).
@@ -159,6 +166,48 @@ src/
   한글 자모·완성형 한글 11,172자만 남기고 한자는 뺀 서브셋(각 약 2.5MB)입니다. 리포트에 새 문자를
   쓰면 fonttools `pyftsubset`으로 범위를 넓혀 다시 만듭니다. 렌더러는 이 폴더 밖의 로컬 파일과 외부 URL을
   읽지 않습니다.
+- PDF 구성: 표지·요약 → 입력·가정 → 비교·지금 할 일 → 계좌별 실행안 → 연도별 현금흐름(가로, 0원 열 생략)
+  → 피부양자 판단 근거 → 월별 상세(처음 24개월) → 100일 실행 체크리스트.
+- 엑셀(`exceljs`, `report-workbook.ts`) 시트: 요약 · 입력값_가정 · 시나리오_요약 · 계좌별_실행안 ·
+  연도별현금흐름 · 월별현금흐름(월별 데이터가 있을 때) · 출처_기준일. 금액은 `#,##0`, 머리글 고정.
+
+### 결제 (토스페이먼츠 v2 결제창, 카드·간편결제)
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/payments/config` | `{ enabled, price }` — 화면 버튼 문구용 |
+| POST | `/api/payments/report-orders` | `{ scenarioSetId, scenarioType }` → `{ orderId, amount, orderName }` (READY 저장) |
+| POST | `/api/payments/confirm` | `{ paymentKey, orderId, amount }` 승인 후 리포트 생성 → `{ orderId, status, scenarioType, method, reportId }` |
+| POST | `/api/payments/fail` | `{ orderId, code }` 결제창 실패·취소 주문을 FAILED로 닫음 |
+
+- 금액은 서버 설정(`REPORT_PRICE`)으로만 정하고, 승인 요청 금액·토스 승인 결과 금액을 주문과 대조합니다.
+  다르면 `PAYMENT_AMOUNT_MISMATCH` 또는 토스 결제를 취소하고 `PAYMENT_APPROVAL_MISMATCH`(502)입니다.
+- `confirm`은 멱등입니다. 같은 결제키로 다시 부르면 같은 `reportId`를 돌려주고, 결제 후 리포트 생성이
+  실패했으면 생성만 다시 시도합니다. 토스가 `ALREADY_PROCESSED_PAYMENT`를 주면 결제 조회로 이어갑니다.
+- 웹훅·가상계좌·정기결제·쿠폰은 범위 밖입니다. 비밀 키는 서버에만 둡니다(`TOSS_SECRET_KEY`).
+
+### 검토 요청 · 100일 실행
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | `/api/review-requests` | `{ reportId, question(5~1000자), consent: true }` (201) |
+| GET | `/api/review-requests` | 내 요청 목록 (운영자 메모 제외) |
+| DELETE | `/api/review-requests/:id` | 처리 전(접수·검토 중) 요청 취소 |
+| POST/GET | `/api/reports/:id/execution-plan` | 100일 계획 시작(201, 이미 있으면 200) · 조회 |
+| PATCH | `/api/execution-plans/:id/items/:key` | `{ done }` 항목 완료 체크 |
+
+- 리포트당 진행 중 요청 1건(`REVIEW_ALREADY_REQUESTED`), 사용자당 동시 3건(`REVIEW_LIMIT`).
+- 체크리스트는 `application/rules/execution-checklist.ts`가 리포트의 "지금 할 일"과 표준 항목
+  (건보료·연금 과세구분·국민연금 확인, 조건부 실업급여·IRP 이전·ISA 전환, 30·60·100일 점검)으로 만듭니다.
+
+### 운영자 (`/api/admin`, `User.role = OPERATOR`만, 아니면 `OPERATOR_ONLY` 403)
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/admin/review-requests?status=&limit=` | 검토 요청 목록 |
+| GET/PATCH | `/api/admin/review-requests/:id` | 상세(동의한 리포트 스냅샷·체크리스트 진행) · 상태/답변/메모 변경 |
+| GET | `/api/admin/payments?status=&limit=` | 결제 목록 (결제키 제외, 이메일·첫 다운로드 시각 포함) |
+| POST | `/api/admin/payments/:id/refund` | `{ reason }` 토스 전액 취소 후 REFUNDED (리포트는 유지) |
+
+- 운영자 지정: `npm run grant-operator -- <email>` (해제는 `--revoke`). `/api/auth/me`·`/api/users/me`에 `role`이 포함됩니다.
+- 운영자는 원본 계좌 데이터를 보지 않고, 사용자가 동의한 리포트 스냅샷만 봅니다.
 
 ### 헬스체크
 | Method | Path | 설명 |
@@ -182,6 +231,9 @@ PORT=3000
 NODE_ENV=development
 GOOGLE_CLIENT_ID=""    # FE VITE_GOOGLE_CLIENT_ID와 동일
 FRONTEND_ORIGIN="http://localhost:5173"  # production 필수 · credentials CORS
+REPORT_PAYMENT_ENABLED=false  # true일 때만 리포트 생성에 결제 필요
+REPORT_PRICE=9900             # 원, 100~1,000,000
+TOSS_SECRET_KEY=""            # 토스 시크릿 키(test_sk_… / live_sk_…), 결제를 켜면 필수 — 프론트에 넣지 않음
 ```
 
 ### 설치 및 실행
@@ -203,6 +255,7 @@ npm run build && npm start
 | `npm run test` | Jest (Windows에서도 동작하도록 `jest.js` 직접 실행) |
 | `npm run type` | 타입 검사 |
 | `npm run lint` / `format` | ESLint / Prettier |
+| `npm run grant-operator -- <email> [--revoke]` | 운영자 역할 부여·해제 |
 | `npm run migrate:resolve-legacy` | 수동 복구 전용 — 아래 "배포·마이그레이션" 참고 |
 
 ## 배포·마이그레이션
@@ -243,7 +296,8 @@ Cookie: retirement_token=eyJ...
   계좌 유형 `IRP`/`ISA`/`연금저축`/`일반계좌`, 항목 최대 50개
 - **세션:** idle 30분 슬라이딩 · absolute 12시간
 - **Rate limit (15분, IP당):** auth 40 · api 300 · health 120 · 무거운 API 20
-  (`POST /api/withdrawal-scenarios/generate`, `GET /api/reports/:id/pdf`, `/api/tax-health-check`)
+  (`POST /api/withdrawal-scenarios/generate`, `GET /api/reports/:id/pdf`, `GET /api/reports/:id/xlsx`,
+  `POST /api/payments/confirm`, `/api/tax-health-check`)
 - **CORS:** production에서 `FRONTEND_ORIGIN` fail-closed · credentials 필수
 - **소유권:** Simulation · Portfolio · Diagnosis `/me` 스코프
 - **테스트:** TDD · 서비스와 동일 디렉터리 `*.test.ts`

@@ -12,6 +12,10 @@ import { createDiagnosisRepo } from "./outbound/repos/diagnosis.repo.js";
 import { createAccountAssetRepo } from "./outbound/repos/account-asset.repo.js";
 import { createWithdrawalScenarioRepo } from "./outbound/repos/withdrawal-scenario.repo.js";
 import { createReportRepo } from "./outbound/repos/report.repo.js";
+import { createPaymentRepo } from "./outbound/repos/payment.repo.js";
+import { createReviewRequestRepo } from "./outbound/repos/review-request.repo.js";
+import { createExecutionPlanRepo } from "./outbound/repos/execution-plan.repo.js";
+import { createTossPaymentGateway } from "./outbound/gateways/toss-payment.gateway.js";
 
 // Services
 import { createAuthService } from "./application/services/auth.service.js";
@@ -24,6 +28,13 @@ import { createWithdrawalScenarioService } from "./application/services/withdraw
 import { createReportService } from "./application/services/report.service.js";
 import { createPdfRenderer } from "./application/services/report/pdf-renderer.js";
 import { createTaxHealthCheckService } from "./application/services/tax-health-check.service.js";
+import { createXlsxRenderer } from "./application/services/report/report-workbook.js";
+import { parsePaymentConfig } from "./application/services/payment-config.js";
+import { createPaymentService } from "./application/services/payment.service.js";
+import { createReviewRequestService } from "./application/services/review-request.service.js";
+import { createExecutionPlanService } from "./application/services/execution-plan.service.js";
+import type { IPaymentGateway } from "./application/contracts/payment-gateway.contract.js";
+import { BusinessException } from "./shared/exceptions/business.exception.js";
 
 // Controllers
 import { createAuthController } from "./inbound/controllers/auth.controller.js";
@@ -35,9 +46,14 @@ import { createAccountAssetController } from "./inbound/controllers/account-asse
 import { createWithdrawalScenarioController } from "./inbound/controllers/withdrawal-scenario.controller.js";
 import { createReportController } from "./inbound/controllers/report.controller.js";
 import { createTaxHealthCheckController } from "./inbound/controllers/tax-health-check.controller.js";
+import { createPaymentController } from "./inbound/controllers/payment.controller.js";
+import { createReviewRequestController } from "./inbound/controllers/review-request.controller.js";
+import { createExecutionPlanController } from "./inbound/controllers/execution-plan.controller.js";
+import { createAdminController } from "./inbound/controllers/admin.controller.js";
 
 // Middlewares
 import { createAuthMiddleware } from "./inbound/middlewares/auth.middleware.js";
+import { createRequireOperator } from "./inbound/middlewares/require-operator.js";
 import { errorMiddleware } from "./inbound/middlewares/error.middleware.js";
 
 // Utils
@@ -108,6 +124,19 @@ const heavyLimiter = rateLimit({
   },
 });
 
+/** 결제가 꺼져 있을 때 — 키 없이도 서버가 뜨도록 호출 시점에만 거절한다 */
+const disabledPaymentGateway: IPaymentGateway = {
+  confirm: async () => {
+    throw new BusinessException("PAYMENT_DISABLED", "결제가 설정되지 않았습니다", 400);
+  },
+  getPayment: async () => {
+    throw new BusinessException("PAYMENT_DISABLED", "결제가 설정되지 않았습니다", 400);
+  },
+  cancel: async () => {
+    throw new BusinessException("PAYMENT_DISABLED", "결제가 설정되지 않았습니다", 400);
+  },
+};
+
 // 헬스체크 스캔·남용 완화 (API보다 여유)
 const healthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -152,6 +181,14 @@ export const createApp = () => {
   const jwtUtil = createJwtUtil(jwtSecret);
   const hashUtil = createBcryptUtil();
   const googleTokenVerifier = createGoogleTokenVerifier(googleClientId);
+  const paymentConfig = parsePaymentConfig(process.env);
+  const tossSecretKey = process.env.TOSS_SECRET_KEY?.trim();
+  if (paymentConfig.enabled && !tossSecretKey) {
+    throw new Error("REPORT_PAYMENT_ENABLED=true이면 TOSS_SECRET_KEY가 필요합니다.");
+  }
+  const paymentGateway = tossSecretKey
+    ? createTossPaymentGateway(tossSecretKey)
+    : disabledPaymentGateway;
 
   // Repos 생성
   const userRepo = createUserRepo();
@@ -161,6 +198,9 @@ export const createApp = () => {
   const accountAssetRepo = createAccountAssetRepo();
   const scenarioRepo = createWithdrawalScenarioRepo();
   const reportRepo = createReportRepo();
+  const paymentRepo = createPaymentRepo();
+  const reviewRepo = createReviewRequestRepo();
+  const executionPlanRepo = createExecutionPlanRepo();
 
   // Services 생성
   const authService = createAuthService(
@@ -183,14 +223,33 @@ export const createApp = () => {
   const reportService = createReportService({
     reportRepo,
     scenarioRepo,
+    paymentRepo,
     renderPdf: createPdfRenderer(),
+    renderXlsx: createXlsxRenderer(),
+    paymentConfig,
   });
+  const paymentService = createPaymentService({
+    paymentRepo,
+    gateway: paymentGateway,
+    reportService,
+    config: paymentConfig,
+  });
+  const reviewService = createReviewRequestService({
+    reviewRepo,
+    reportRepo,
+    executionPlanRepo,
+    findUserEmail: async (userId) => (await userRepo.findById(userId))?.email ?? null,
+  });
+  const executionPlanService = createExecutionPlanService({ executionPlanRepo, reportRepo });
   const taxHealthCheckService = createTaxHealthCheckService();
 
   // Auth middleware 생성
   const authMiddleware = createAuthMiddleware(
     jwtUtil,
     async (userId) => (await userRepo.findById(userId)) !== null,
+  );
+  const requireOperator = createRequireOperator(
+    async (userId) => (await userRepo.findById(userId))?.role ?? null,
   );
 
   // Controllers 생성
@@ -205,6 +264,10 @@ export const createApp = () => {
   );
   const reportController = createReportController(reportService);
   const taxHealthCheckController = createTaxHealthCheckController(taxHealthCheckService);
+  const paymentController = createPaymentController(paymentService);
+  const reviewRequestController = createReviewRequestController(reviewService);
+  const executionPlanController = createExecutionPlanController(executionPlanService);
+  const adminController = createAdminController({ reviewService, paymentService });
 
   // Public routes (인증 불필요)
   app.use("/health", healthLimiter, healthRouter);
@@ -219,12 +282,19 @@ export const createApp = () => {
   // 무거운 계산 경로는 별도 한도를 먼저 적용
   app.post("/api/withdrawal-scenarios/generate", heavyLimiter);
   app.get("/api/reports/:id/pdf", heavyLimiter);
+  app.get("/api/reports/:id/xlsx", heavyLimiter);
+  app.post("/api/payments/confirm", heavyLimiter);
   app.use(
     "/api/withdrawal-scenarios",
     authMiddleware,
     withdrawalScenarioController.router,
   );
+  app.use("/api/reports", authMiddleware, executionPlanController.reportRouter);
   app.use("/api/reports", authMiddleware, reportController.router);
+  app.use("/api/execution-plans", authMiddleware, executionPlanController.router);
+  app.use("/api/payments", authMiddleware, paymentController.router);
+  app.use("/api/review-requests", authMiddleware, reviewRequestController.router);
+  app.use("/api/admin", authMiddleware, requireOperator, adminController.router);
   app.use(
     "/api/tax-health-check",
     heavyLimiter,

@@ -14,7 +14,10 @@ const summarySelect = {
   scenarioSetId: true,
   scenarioType: true,
   ruleVersion: true,
+  title: true,
+  firstDownloadedAt: true,
   generatedAt: true,
+  updatedAt: true,
 } as const;
 
 const toSummary = (
@@ -25,10 +28,13 @@ const toSummary = (
   scenarioSetId: row.scenarioSetId,
   scenarioType: row.scenarioType as ScenarioType,
   ruleVersion: row.ruleVersion,
+  title: row.title,
+  firstDownloadedAt: row.firstDownloadedAt,
   generatedAt: row.generatedAt,
+  updatedAt: row.updatedAt,
 });
 
-const toRecord = (row: ReportSnapshot): ReportSnapshotRecord => ({
+export const toReportRecord = (row: ReportSnapshot): ReportSnapshotRecord => ({
   ...toSummary(row),
   content: row.content as unknown as ReportContent,
 });
@@ -46,12 +52,12 @@ export const createReportRepo = (): IReportRepo => ({
         content: data.content as object,
       },
     });
-    return toRecord(row);
+    return toReportRecord(row);
   },
 
   async findById(id) {
     const row = await prisma.reportSnapshot.findUnique({ where: { id } });
-    return row ? toRecord(row) : null;
+    return row ? toReportRecord(row) : null;
   },
 
   async findByUserId(userId) {
@@ -63,21 +69,28 @@ export const createReportRepo = (): IReportRepo => ({
     return rows.map(toSummary);
   },
 
-  async delete(id) {
-    await prisma.reportSnapshot.delete({ where: { id } });
+  async countByUserId(userId) {
+    return prisma.reportSnapshot.count({ where: { userId } });
   },
 
-  async pruneByUserId(userId, keep) {
-    const stale = await prisma.reportSnapshot.findMany({
-      where: { userId },
-      orderBy: latestFirst,
-      skip: keep,
-      select: { id: true },
+  async updateTitle(id, title) {
+    const row = await prisma.reportSnapshot.update({
+      where: { id },
+      data: { title },
+      select: summarySelect,
     });
-    if (stale.length === 0) return;
-    await prisma.reportSnapshot.deleteMany({
-      where: { id: { in: stale.map((s) => s.id) } },
+    return toSummary(row);
+  },
+
+  async markDownloaded(id, at) {
+    await prisma.reportSnapshot.updateMany({
+      where: { id, firstDownloadedAt: null },
+      data: { firstDownloadedAt: at },
     });
+  },
+
+  async delete(id) {
+    await prisma.reportSnapshot.delete({ where: { id } });
   },
 });
 

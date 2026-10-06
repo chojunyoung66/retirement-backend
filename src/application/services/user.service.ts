@@ -1,4 +1,4 @@
-import type { IUserRepo } from "../contracts/user-repo.contract.js";
+import { toUserRole, type IUserRepo, type UserRole } from "../contracts/user-repo.contract.js";
 import type { IHashUtil } from "../../shared/contracts/hash-util.contract.js";
 import { BusinessException } from "../../shared/exceptions/business.exception.js";
 
@@ -7,6 +7,7 @@ export interface UserProfile {
   email: string;
   name: string;
   hasPassword: boolean;
+  role?: UserRole;
 }
 
 export const WITHDRAWAL_PHRASE = "탈퇴합니다";
@@ -37,6 +38,7 @@ export const createUserService = (
       email: user.email,
       name: user.name,
       hasPassword: Boolean(user.password),
+      role: toUserRole(user.role),
     };
   },
 

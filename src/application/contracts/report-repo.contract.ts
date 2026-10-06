@@ -7,7 +7,10 @@ export interface ReportSnapshotSummary {
   scenarioSetId: number | null;
   scenarioType: ScenarioType;
   ruleVersion: string;
+  title: string | null;
+  firstDownloadedAt: Date | null;
   generatedAt: Date;
+  updatedAt: Date;
 }
 
 export interface ReportSnapshotRecord extends ReportSnapshotSummary {
@@ -27,7 +30,9 @@ export interface IReportRepo {
   findById(id: number): Promise<ReportSnapshotRecord | null>;
   /** 목록은 본문 없이 최신순 */
   findByUserId(userId: number): Promise<ReportSnapshotSummary[]>;
+  countByUserId(userId: number): Promise<number>;
+  updateTitle(id: number, title: string | null): Promise<ReportSnapshotSummary>;
+  /** 처음 받은 시각만 기록한다 */
+  markDownloaded(id: number, at: Date): Promise<void>;
   delete(id: number): Promise<void>;
-  /** 최신 keep건만 남긴다 */
-  pruneByUserId(userId: number, keep: number): Promise<void>;
 }

@@ -15,11 +15,14 @@ describe("ReportController", () => {
     app = express();
     app.use(express.json());
     service = {
+      assertCreatable: jest.fn(),
       create: jest.fn(),
       list: jest.fn(),
       get: jest.fn(),
+      rename: jest.fn(),
       delete: jest.fn(),
       renderPdf: jest.fn(),
+      renderXlsx: jest.fn(),
     };
     const jwtUtil: Partial<IJwtUtil> = {
       sign: jest.fn(),
@@ -111,6 +114,66 @@ describe("ReportController", () => {
     expect(response.headers["cache-control"]).toBe("no-store");
     expect((response.body as Buffer).subarray(0, 4).toString()).toBe("%PDF");
     expect(service.renderPdf).toHaveBeenCalledWith(3, 1);
+  });
+
+  it("결제 주문 ID를 함께 넘기고, 형식이 틀리면 400", async () => {
+    service.create.mockResolvedValueOnce({ id: 4 });
+    const ok = await request(app)
+      .post("/reports")
+      .set(auth)
+      .send({ scenarioSetId: 7, scenarioType: "D", orderId: "rpt_abc123" });
+    expect(ok.status).toBe(201);
+    expect(service.create).toHaveBeenCalledWith(1, {
+      scenarioSetId: 7,
+      scenarioType: "D",
+      orderId: "rpt_abc123",
+    });
+    const bad = await request(app)
+      .post("/reports")
+      .set(auth)
+      .send({ scenarioSetId: 7, scenarioType: "D", orderId: "../x" });
+    expect(bad.status).toBe(400);
+  });
+
+  it("결제가 필요하면 402를 그대로 전달한다", async () => {
+    service.create.mockRejectedValueOnce(
+      new BusinessException("PAYMENT_REQUIRED", "리포트를 만들려면 결제가 필요합니다", 402),
+    );
+    const response = await request(app).post("/reports").set(auth).send({ scenarioSetId: 7, scenarioType: "D" });
+    expect(response.status).toBe(402);
+    expect(response.body.error.code).toBe("PAYMENT_REQUIRED");
+  });
+
+  it("이름을 바꾸고, 40자를 넘으면 400", async () => {
+    service.rename.mockResolvedValueOnce({ id: 3, title: "첫해 계획" });
+    const ok = await request(app).patch("/reports/3").set(auth).send({ title: "첫해 계획" });
+    expect(ok.status).toBe(200);
+    expect(service.rename).toHaveBeenCalledWith(3, 1, "첫해 계획");
+    const reset = await request(app).patch("/reports/3").set(auth).send({ title: null });
+    expect(reset.status).toBe(200);
+    const tooLong = await request(app).patch("/reports/3").set(auth).send({ title: "가".repeat(41) });
+    expect(tooLong.status).toBe(400);
+  });
+
+  it("엑셀을 한글 파일명과 함께 첨부 파일로 내려준다", async () => {
+    service.renderXlsx.mockResolvedValueOnce(Buffer.from("PK\u0003\u0004test"));
+    const response = await request(app)
+      .get("/reports/3/xlsx")
+      .set(auth)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      });
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toBe(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    expect(response.headers["content-disposition"]).toContain('filename="retirement-plan-3.xlsx"');
+    expect(response.headers["content-disposition"]).toContain("filename*=UTF-8''");
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(service.renderXlsx).toHaveBeenCalledWith(3, 1);
   });
 
   it("리포트를 삭제한다", async () => {

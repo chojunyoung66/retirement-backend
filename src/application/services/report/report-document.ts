@@ -1,7 +1,12 @@
 import type { Content, TableCell, TDocumentDefinitions } from "pdfmake/interfaces.js";
+import { buildExecutionChecklist } from "../../rules/execution-checklist.js";
 import { DEPENDENT_STATUS_LABEL } from "../withdrawal/dependent.js";
-import type { PlanItem, ScenarioSummary } from "../withdrawal/types.js";
+import type { PlanItem, ScenarioSummary, YearRow } from "../withdrawal/types.js";
 import { ACTION_LABEL, type ReportContent } from "./report-content.js";
+import { assumptionRows, dependentReasonGroups, inputSummaryRows } from "./report-labels.js";
+
+/** 월별 상세 표는 처음 2년만 싣는다 — 전체는 엑셀에 담는다 */
+export const MONTHLY_DETAIL_MONTHS = 24;
 
 export const REPORT_FONT = "NotoSansKR";
 
@@ -61,6 +66,52 @@ const tableLayout = {
 };
 
 const headerCell = (text: string): TableCell => ({ text, bold: true });
+
+const amountCell = (amount: number, danger = false): TableCell =>
+  danger && amount > 0
+    ? { text: formatWan(amount), color: COLOR.danger, alignment: "right" }
+    : { text: formatWan(amount), alignment: "right" };
+
+const keyValueTable = (rows: [string, string][]): Content => ({
+  table: { widths: [150, "*"], body: [[headerCell("항목"), headerCell("값")], ...rows] },
+  layout: tableLayout,
+});
+
+interface YearColumn {
+  header: string;
+  cell: (row: YearRow) => TableCell;
+}
+
+/** 배우자 연금·실업급여처럼 값이 없는 열은 뺀다 (가로 페이지 폭 확보) */
+const yearColumns = (yearly: YearRow[]): YearColumn[] => {
+  const hasValue = (pick: (row: YearRow) => number | undefined) =>
+    yearly.some((row) => (pick(row) ?? 0) > 0);
+  const columns: (YearColumn | null)[] = [
+    {
+      header: "나이",
+      cell: (row) => ({
+        text: [`${row.age}세\n`, { text: String(row.year), fontSize: 7, color: COLOR.muted }],
+      }),
+    },
+    { header: "지출", cell: (row) => amountCell(row.expense) },
+    // 고도화 이전 리포트에는 건보료 필드가 없다
+    { header: "건보료", cell: (row) => amountCell(row.healthPremium ?? 0) },
+    { header: "국민연금", cell: (row) => amountCell(row.nationalPension) },
+    hasValue((row) => row.spouseNationalPension)
+      ? { header: "배우자 연금", cell: (row) => amountCell(row.spouseNationalPension) }
+      : null,
+    hasValue((row) => row.unemployment)
+      ? { header: "실업급여", cell: (row) => amountCell(row.unemployment) }
+      : null,
+    { header: "세전 인출", cell: (row) => amountCell(row.grossWithdrawal) },
+    { header: "세금", cell: (row) => amountCell(row.tax) },
+    { header: "세후 인출", cell: (row) => amountCell(row.netWithdrawal) },
+    { header: "부족", cell: (row) => amountCell(row.shortfall, true) },
+    { header: "연말 잔액", cell: (row) => amountCell(row.endingBalance) },
+    { header: "피부양자", cell: (row) => DEPENDENT_STATUS_LABEL[row.dependentStatus] },
+  ];
+  return columns.filter((column): column is YearColumn => column !== null);
+};
 
 const planItemBlock = (item: PlanItem): Content => {
   const amounts: Content[] =
@@ -140,22 +191,30 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
     ],
   ];
 
+  const columns = yearColumns(scenario.yearly);
   const yearlyRows: TableCell[][] = [
-    ["나이", "지출", "건보료", "세후 인출", "세금", "부족", "연말 잔액", "피부양자"].map(headerCell),
-    ...scenario.yearly.map((row): TableCell[] => [
-      { text: [`${row.age}세\n`, { text: String(row.year), fontSize: 7, color: COLOR.muted }] },
-      formatWan(row.expense),
-      // 고도화 이전 리포트에는 건보료 필드가 없다
-      formatWan(row.healthPremium ?? 0),
-      formatWan(row.netWithdrawal),
-      formatWan(row.tax),
-      row.shortfall > 0
-        ? { text: formatWan(row.shortfall), color: COLOR.danger }
-        : formatWan(row.shortfall),
-      formatWan(row.endingBalance),
-      DEPENDENT_STATUS_LABEL[row.dependentStatus],
-    ]),
+    columns.map((column) => headerCell(column.header)),
+    ...scenario.yearly.map((row) => columns.map((column) => column.cell(row))),
   ];
+  const reasonGroups = dependentReasonGroups(scenario.yearly);
+
+  const monthly = scenario.monthly;
+  const monthlyRows: TableCell[][] | null =
+    monthly && monthly.ym.length > 0
+      ? [
+          ["연월", "세전 인출", "세금", "세후 인출", "부족", "잔액"].map(headerCell),
+          ...monthly.ym.slice(0, MONTHLY_DETAIL_MONTHS).map((ym, i): TableCell[] => [
+            formatYm(ym),
+            amountCell(monthly.gross[i] ?? 0),
+            amountCell(monthly.tax[i] ?? 0),
+            amountCell(monthly.net[i] ?? 0),
+            amountCell(monthly.shortfall[i] ?? 0, true),
+            amountCell(monthly.balance[i] ?? 0),
+          ]),
+        ]
+      : null;
+
+  const checklist = buildExecutionChecklist(content, new Date(content.generatedAt));
 
   const checkNeeded = content.accountChecks.filter(
     (check) => check.nonDeductibleStatus === "CHECK_NEEDED",
@@ -193,14 +252,26 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
       margin: [40, 16, 40, 0],
     }),
     content: [
-      { text: content.title, style: "title" },
+      // 표지 — 첫 페이지에 선택안과 핵심 요약을 함께 둔다
       {
-        text: `생성일 ${formatDate(content.generatedAt)} · 규칙 버전 ${content.ruleVersion}`,
-        style: "muted",
-        margin: [0, 2, 0, 12],
+        stack: [
+          { text: "RETIREMENT CASH PLAN", color: COLOR.muted, fontSize: 9, characterSpacing: 1 },
+          { text: content.title, style: "title", margin: [0, 4, 0, 0] },
+          {
+            text: `생성일 ${formatDate(content.generatedAt)} · 규칙 버전 ${content.ruleVersion} · 계산 기간 ${formatPeriod(content.startYm, content.endYm)}`,
+            style: "muted",
+            margin: [0, 2, 0, 0],
+          },
+        ],
+        margin: [0, 0, 0, 14],
+      },
+      {
+        canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1, lineColor: COLOR.primary }],
+        margin: [0, 0, 0, 12],
       },
       {
         text: [
+          { text: "선택한 실행안  ", color: COLOR.muted, fontSize: 10 },
           { text: scenario.title, bold: true, fontSize: 15 },
           scenario.recommended ? { text: "  추천", color: COLOR.primary, bold: true } : "",
         ],
@@ -228,6 +299,17 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
           : { text: "지금 바로 실행할 항목이 없습니다.", style: "muted" },
         {
           text: `기본 추천: ${recommendedTitle}. ${content.recommendationNote}`,
+          style: "muted",
+          margin: [0, 6, 0, 0],
+        },
+      ),
+
+      ...section(
+        "입력·가정",
+        keyValueTable(inputSummaryRows(content, formatWan)),
+        { stack: [keyValueTable(assumptionRows(content))], margin: [0, 8, 0, 0] },
+        {
+          text: "이름·이메일·계좌번호 같은 식별정보는 리포트에 담지 않습니다.",
           style: "muted",
           margin: [0, 6, 0, 0],
         },
@@ -267,20 +349,84 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
         ? section("ISA 만기·연금계좌 전환", isaBlocks[0]!, ...isaBlocks.slice(1))
         : []),
 
-      // 긴 표라서 새 페이지에서 시작한다
-      { text: "연도별 현금흐름 (연간 합계)", style: "section", pageBreak: "before" },
+      // 열이 많은 표라서 가로 페이지에서 시작한다
+      {
+        text: "연도별 현금흐름 (연간 합계)",
+        style: "section",
+        pageBreak: "before",
+        pageOrientation: "landscape",
+      },
       {
         table: {
           headerRows: 1,
           dontBreakRows: true,
-          widths: [40, "*", "*", "*", "*", "*", "*", 50],
+          widths: columns.map((column, i) =>
+            i === 0 ? 40 : column.header === "피부양자" ? 50 : "*",
+          ),
           body: yearlyRows,
         },
         layout: tableLayout,
-        fontSize: 9,
+        fontSize: 8,
       },
       {
         text: "피부양자는 “추정 가능 / 주의 / 확인 필요” 세 단계로만 표시하며, 실제 자격은 건강보험공단에서 확인하세요.",
+        style: "muted",
+        margin: [0, 6, 0, 0],
+      },
+      ...(reasonGroups.length > 0
+        ? section(
+            "피부양자 판단 근거",
+            {
+              ul: reasonGroups.map((group) => ({
+                text: [{ text: `${group.years}  `, bold: true }, group.label],
+              })),
+              fontSize: 10,
+            },
+          )
+        : []),
+
+      ...(monthlyRows
+        ? [
+            {
+              text: `월별 현금흐름 (처음 ${Math.min(MONTHLY_DETAIL_MONTHS, monthlyRows.length - 1)}개월)`,
+              style: "section",
+              pageBreak: "before",
+              pageOrientation: "portrait",
+            } as Content,
+            {
+              table: { headerRows: 1, dontBreakRows: true, widths: [70, "*", "*", "*", "*", "*"], body: monthlyRows },
+              layout: tableLayout,
+              fontSize: 9,
+            } as Content,
+            {
+              text: "전체 기간의 월별 값은 엑셀 파일에 담겨 있습니다.",
+              style: "muted",
+              margin: [0, 6, 0, 0],
+            } as Content,
+          ]
+        : []),
+
+      // 연도별 표가 가로라서 월별 표가 없으면 여기서 세로 페이지로 되돌린다
+      {
+        text: "100일 실행 체크리스트",
+        style: "section",
+        ...(monthlyRows ? {} : { pageBreak: "before", pageOrientation: "portrait" }),
+      } as Content,
+      {
+        table: {
+          headerRows: 1,
+          dontBreakRows: true,
+          widths: [50, "*", 30],
+          body: [
+            [headerCell("기한"), headerCell("할 일"), headerCell("완료")],
+            ...checklist.map((item): TableCell[] => [`D+${item.dueDay}`, item.label, "□"]),
+          ],
+        },
+        layout: tableLayout,
+        fontSize: 10,
+      },
+      {
+        text: "앱의 ‘100일 실행’ 화면에서 완료 여부를 기록하고 진행률을 확인할 수 있습니다.",
         style: "muted",
         margin: [0, 6, 0, 0],
       },
