@@ -3,7 +3,7 @@
 은퇴 재무 시뮬레이션 API 서버입니다.
 인증·진단 저장·시뮬레이션(국민연금·건강보험·퇴직금·실업급여·ISA·IRP·주택연금)·연금 포트폴리오를 제공합니다.
 
-- **배포:** https://retirement-backend-ph7y.onrender.com
+- **배포:** https://retirement-backend-sg.onrender.com
 - **프론트:** https://retirement-frontend-y2dn.vercel.app
 - **흐름 정의서:** [`docs/feature-design-flow.md`](docs/feature-design-flow.md) (정본은 FE 레포 동명 문서)
 
