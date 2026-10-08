@@ -3,7 +3,15 @@ import { buildExecutionChecklist } from "../../rules/execution-checklist.js";
 import { DEPENDENT_STATUS_LABEL } from "../withdrawal/dependent.js";
 import type { PlanItem, ScenarioSummary, YearRow } from "../withdrawal/types.js";
 import { ACTION_LABEL, type ReportContent } from "./report-content.js";
-import { assumptionRows, dependentReasonGroups, inputSummaryRows } from "./report-labels.js";
+import {
+  annuityLimitFocus,
+  assumptionRows,
+  dependentReasonGroups,
+  exceededYearsText,
+  inputSummaryRows,
+  limitFreeStartYear,
+  localTaxOf,
+} from "./report-labels.js";
 
 /** 월별 상세 표는 처음 2년만 싣는다 — 전체는 엑셀에 담는다 */
 export const MONTHLY_DETAIL_MONTHS = 24;
@@ -39,6 +47,11 @@ const formatPeriod = (startYm: string | null, endYm: string | null): string => {
 };
 
 const formatDate = (iso: string): string => iso.slice(0, 10);
+
+const taxWithLocalText = (totalTax: number, localIncomeTax: number | undefined): string =>
+  totalTax > 0
+    ? `${formatWan(totalTax)} (지방소득세 ${formatWan(localTaxOf(totalTax, localIncomeTax))} 포함)`
+    : formatWan(totalTax);
 
 const depletionText = (summary: ScenarioSummary): string =>
   summary.depletionAge === null ? "계산 기간 내 소진 없음" : `${summary.depletionAge}세에 소진`;
@@ -105,12 +118,45 @@ const yearColumns = (yearly: YearRow[]): YearColumn[] => {
       : null,
     { header: "세전 인출", cell: (row) => amountCell(row.grossWithdrawal) },
     { header: "세금", cell: (row) => amountCell(row.tax) },
+    { header: "지방소득세", cell: (row) => amountCell(localTaxOf(row.tax, row.localIncomeTax)) },
     { header: "세후 인출", cell: (row) => amountCell(row.netWithdrawal) },
     { header: "부족", cell: (row) => amountCell(row.shortfall, true) },
     { header: "연말 잔액", cell: (row) => amountCell(row.endingBalance) },
     { header: "피부양자", cell: (row) => DEPENDENT_STATUS_LABEL[row.dependentStatus] },
   ];
   return columns.filter((column): column is YearColumn => column !== null);
+};
+
+/** 고도화 이전 리포트에는 계좌 총액·수령한도가 없다 */
+const balanceAndLimitLines = (item: PlanItem): Content[] => {
+  const lines: Content[] = [];
+  if (item.startBalance !== undefined && item.startBalance !== null) {
+    lines.push({
+      text: ["계좌 총액 (시작 시점) ", { text: formatWan(item.startBalance), bold: true }],
+    });
+  }
+  const limit = item.annuityLimit;
+  const focus = limit ? annuityLimitFocus(limit) : null;
+  const freeFrom = limit && item.actionType !== "HOLD" ? limitFreeStartYear(limit) : null;
+  if (freeFrom !== null) {
+    lines.push({ text: `연간 수령한도 없음 (11년차인 ${freeFrom}년 이후 인출)` });
+  } else if (limit && focus) {
+    lines.push({
+      text: [
+        `연간 수령한도 (${focus.year}년 · ${focus.receiptYear}년차) `,
+        { text: formatWan(focus.limit), bold: true },
+        `  ·  계획 인출 ${formatWan(focus.planned)}`,
+      ],
+    });
+    if (limit.exceededYears.length > 0) {
+      lines.push({
+        text: `${exceededYearsText(limit)} 계획 인출이 연금수령한도를 넘습니다.`,
+        color: COLOR.caution,
+        fontSize: 10,
+      });
+    }
+  }
+  return lines;
 };
 
 const planItemBlock = (item: PlanItem): Content => {
@@ -122,7 +168,9 @@ const planItemBlock = (item: PlanItem): Content => {
             text: [
               item.actionType === "LUMP_SUM" ? "수령액 (세전 / 세후) " : "월 평균 (세전 / 세후) ",
               { text: `${formatWan(item.monthlyGross)} / ${formatWan(item.monthlyNet)}`, bold: true },
-              item.actionType === "INCOME" ? "" : `  ·  추정 세금 합계 ${formatWan(item.totalTax)}`,
+              item.actionType === "INCOME"
+                ? ""
+                : `  ·  추정 세금 합계 ${taxWithLocalText(item.totalTax, item.localIncomeTax)}`,
             ],
           },
         ];
@@ -137,6 +185,7 @@ const planItemBlock = (item: PlanItem): Content => {
         ],
       },
       { text: formatPeriod(item.startYm, item.endYm), color: COLOR.muted, fontSize: 10 },
+      ...balanceAndLimitLines(item),
       ...amounts,
       { text: [{ text: "실행 방법 ", bold: true }, item.method] },
       { text: [{ text: "세금 ", bold: true }, item.taxNote] },
@@ -162,7 +211,10 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
   const summaryRows: TableCell[][] = [
     [headerCell("항목"), headerCell("값")],
     ["세후 총 인출", formatWan(scenario.summary.netWithdrawal)],
-    ["추정 세금 합계", formatWan(scenario.summary.totalTax)],
+    [
+      "추정 세금 합계",
+      taxWithLocalText(scenario.summary.totalTax, scenario.summary.localIncomeTax),
+    ],
     [
       "자산 소진",
       `${depletionText(scenario.summary)}${
@@ -179,6 +231,12 @@ export const buildReportDoc = (content: ReportContent): TDocumentDefinitions => 
     [headerCell("항목"), ...content.comparison.map((row) => headerCell(`${row.type}안`))],
     ["세후 총 인출", ...content.comparison.map((row) => formatWan(row.summary.netWithdrawal))],
     ["추정 세금", ...content.comparison.map((row) => formatWan(row.summary.totalTax))],
+    [
+      "지방소득세(포함)",
+      ...content.comparison.map((row) =>
+        formatWan(localTaxOf(row.summary.totalTax, row.summary.localIncomeTax)),
+      ),
+    ],
     [
       "자산 소진",
       ...content.comparison.map((row) =>

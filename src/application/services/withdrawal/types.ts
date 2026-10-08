@@ -98,10 +98,37 @@ export interface PlanItem {
   monthlyNet: number;
   totalGross: number;
   totalTax: number;
+  /** totalTax 중 지방소득세 */
+  localIncomeTax: number;
+  /** 계산 시작 시점 계좌 총액(실업급여·잉여 적립은 null) */
+  startBalance: number | null;
+  /** 연금계좌만 — 일시금으로 받은 계좌와 비연금 계좌는 null */
+  annuityLimit: AnnuityLimit | null;
   method: string;
   taxNote: string;
   healthInsuranceNote: string;
   cautions: string[];
+}
+
+export interface AnnuityLimitYear {
+  year: number;
+  /** 연금수령연차 */
+  receiptYear: number;
+  /** 첫해는 계산 시작 시점, 이후는 1월 잔액 */
+  openingBalance: number;
+  limit: number;
+  /** 그해 연금수령 방식으로 꺼낸 세전 합계 */
+  planned: number;
+}
+
+export interface AnnuityLimit {
+  /** 1년차(구계좌는 6년차)로 본 해 */
+  baseYear: number;
+  /** 2013.3 이전 가입 연금저축(6년차부터 기산) */
+  legacy: boolean;
+  /** 10년차 또는 잔액 소진까지 */
+  years: AnnuityLimitYear[];
+  exceededYears: number[];
 }
 
 export interface YearRow {
@@ -116,6 +143,8 @@ export interface YearRow {
   healthPremium: number;
   grossWithdrawal: number;
   tax: number;
+  /** tax 중 지방소득세 */
+  localIncomeTax: number;
   netWithdrawal: number;
   shortfall: number;
   endingBalance: number;
@@ -136,6 +165,8 @@ export interface MonthlySeries {
 export interface ScenarioSummary {
   grossWithdrawal: number;
   totalTax: number;
+  /** totalTax 중 지방소득세 */
+  localIncomeTax: number;
   netWithdrawal: number;
   depletionAge: number | null;
   shortfallMonths: number;

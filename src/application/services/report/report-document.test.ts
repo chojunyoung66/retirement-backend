@@ -8,7 +8,7 @@ import {
   REPORT_FONT,
 } from "./report-document.js";
 import { createPdfRenderer } from "./pdf-renderer.js";
-import { sampleScenarioSet } from "./report.fixture.js";
+import { legacySnapshotOf, sampleScenarioSet } from "./report.fixture.js";
 
 const content = buildReportContent(
   sampleScenarioSet(),
@@ -96,6 +96,32 @@ describe("buildReportDoc", () => {
       "portrait",
     );
     expect(JSON.stringify(legacy)).not.toContain("월별 현금흐름 (처음");
+  });
+
+  it("요약·비교·연도별 표·실행안에 지방소득세를 나눠 적는다", () => {
+    const { totalTax, localIncomeTax } = content.scenario.summary;
+    expect(text).toContain(`${formatWan(totalTax)} (지방소득세 ${formatWan(localIncomeTax)} 포함)`);
+    expect(text).toContain("지방소득세(포함)");
+    expect(JSON.stringify(tableWithHeader("연말 잔액")?.table.body[0])).toContain("지방소득세");
+  });
+
+  it("계좌별 실행안에 계좌 총액과 연간 수령한도를 담는다", () => {
+    expect(text).toContain(`계좌 총액 (시작 시점) `);
+    expect(text).toContain(formatWan(300_000_000));
+    const dc = content.scenario.planItems.find((p) => p.accountType === "DC")!;
+    const first = dc.annuityLimit!.years.find((y) => y.planned > 0)!;
+    expect(text).toContain(`연간 수령한도 (${first.year}년 · ${first.receiptYear}년차) `);
+    expect(text).toContain(formatWan(first.limit));
+    // D안 IRP는 70세(2038년)부터 꺼내 11년차 이후라 한도가 없다
+    expect(text).toContain("연간 수령한도 없음 (11년차인 2036년 이후 인출)");
+  });
+
+  it("예전 스냅샷은 총액·한도 줄을 빼고 지방소득세는 합계에서 나눠 보여 준다", () => {
+    const legacy = JSON.stringify(buildReportDoc(legacySnapshotOf(content)).content);
+    expect(legacy).not.toContain("계좌 총액 (시작 시점)");
+    expect(legacy).not.toContain("연간 수령한도");
+    const { totalTax } = content.scenario.summary;
+    expect(legacy).toContain(`(지방소득세 ${formatWan(Math.round(totalTax / 11))} 포함)`);
   });
 
   it("재산을 입력하지 않았으면 피부양자 기간을 숫자로 쓰지 않는다", () => {

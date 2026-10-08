@@ -149,6 +149,7 @@ export const ISA_RULES = {
   } satisfies RuleMeta,
   annualContributionLimit: 20_000_000,
   taxFreeLimitGeneral: 2_000_000,
+  // 세율은 지방소득세 포함(14%+1.4%, 9%+0.9%) — 세금 분리 표시가 이 전제에 의존한다
   generalTaxRate: 0.154,
   separateTaxRate: 0.099,
   // 만기 후 60일 이내 연금계좌 전환 시 전환액의 10%(최대 300만원)를 세액공제 대상 납입액에 추가
@@ -166,10 +167,16 @@ export const ISA_RULES = {
 export const PENSION_INCOME_TAX_RULES = {
   meta: {
     effectiveDate: "2026-01-01",
-    source: "소득세법 제129조 제1항 제5호의2·5호의3, 제14조 제3항 제9호(사적연금 1,500만원), 국세청 연금소득 안내(2026.1.1 이후 연금수령분)",
+    source: "소득세법 제129조 제1항 제5호의2·5호의3, 제14조 제3항 제9호(사적연금 1,500만원), 시행령 제40조의2(연금수령한도), 국세청 연금소득 안내(2026.1.1 이후 연금수령분)",
   } satisfies RuleMeta,
+  // 아래 세율은 모두 지방소득세(국세의 10%)를 더한 값이다 — 세금 분리 표시(splitLocalTax)가 이 전제에 의존한다
   // 연금수령 최소 연령
   annuityMinAge: 55,
+  // 연금수령한도 = 연초 평가액 ÷ (11 − 연금수령연차) × 120%, 11년차부터 한도 없음
+  annuityLimitMultiplier: 1.2,
+  annuityLimitFreeFromYear: 11,
+  // 2013.3 이전 가입 연금저축(구계좌)은 6년차부터 기산
+  legacyStartReceiptYear: 6,
   // 세액공제 원금·운용수익 연금수령 원천징수세율(지방소득세 포함), 나이 하한 내림차순
   privatePensionRateByAge: [
     { fromAge: 80, rate: 0.033 },

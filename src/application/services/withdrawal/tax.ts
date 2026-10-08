@@ -1,6 +1,7 @@
 import {
   ISA_RULES,
   PENSION_INCOME_TAX_RULES as P,
+  SEVERANCE_TAX_RULES,
 } from "../../rules/rule-set.js";
 import { calculateRetirementIncomeTax } from "../calculators/severance-pay.calculator.js";
 
@@ -37,6 +38,28 @@ export const overThresholdExtraTax = (
     annualTaxableAnnuity * P.overThresholdSeparateRate - taxAlreadyWithheld,
   );
 };
+
+/**
+ * 지방소득세가 포함된 세액을 소득세와 지방소득세로 나눈다.
+ * 엔진의 모든 세율이 국세 × (1 + 지방소득세율)이라는 전제에 의존한다.
+ */
+export const splitLocalTax = (
+  totalTax: number,
+): { incomeTax: number; localIncomeTax: number } => {
+  const r = SEVERANCE_TAX_RULES.localIncomeTaxRate;
+  const localIncomeTax = Math.round((totalTax * r) / (1 + r));
+  return { incomeTax: totalTax - localIncomeTax, localIncomeTax };
+};
+
+/** 연금수령한도 — 11년차부터는 한도가 없어 null */
+export const annuityLimitOf = (
+  openingBalance: number,
+  receiptYear: number,
+): number | null =>
+  receiptYear >= P.annuityLimitFreeFromYear
+    ? null
+    : (openingBalance / (P.annuityLimitFreeFromYear - receiptYear)) *
+      P.annuityLimitMultiplier;
 
 /** 일반 계좌 이자·배당 원천징수세율(지방소득세 포함) */
 export const interestTaxRate = ISA_RULES.generalTaxRate;

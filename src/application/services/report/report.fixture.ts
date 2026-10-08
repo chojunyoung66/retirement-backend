@@ -1,5 +1,6 @@
 import { generateScenarioSet } from "../withdrawal/engine.js";
 import type { EngineAccount, ScenarioSetResult } from "../withdrawal/types.js";
+import type { ReportContent } from "./report-content.js";
 
 const account = (
   id: number,
@@ -49,3 +50,24 @@ export const sampleScenarioSet = (): ScenarioSetResult =>
       account(6, "CASH", 20_000_000),
     ],
   });
+
+/** 계좌 총액·수령한도·지방소득세 필드가 생기기 전에 저장된 리포트 스냅샷 */
+export const legacySnapshotOf = (content: ReportContent): ReportContent => {
+  const stripSummary = <T extends { localIncomeTax?: number }>({ localIncomeTax: _l, ...rest }: T) =>
+    rest;
+  return {
+    ...content,
+    comparison: content.comparison.map((row) => ({
+      ...row,
+      summary: stripSummary(row.summary),
+    })),
+    scenario: {
+      ...content.scenario,
+      summary: stripSummary(content.scenario.summary),
+      yearly: content.scenario.yearly.map(stripSummary),
+      planItems: content.scenario.planItems.map(
+        ({ localIncomeTax: _l, startBalance: _s, annuityLimit: _a, ...rest }) => rest,
+      ),
+    },
+  } as unknown as ReportContent;
+};

@@ -27,6 +27,24 @@ firstDownloadedAt|null, updatedAt, isOutdated`.
 - 파일 다운로드(PDF·엑셀) 성공 시 `firstDownloadedAt`이 비어 있으면 기록합니다.
 - `content.scenario.monthly`는 v1.1 이후 리포트에만 있습니다(PDF·엑셀은 없으면 월별 섹션 생략).
 
+### 계좌 총액·연금수령한도·지방소득세 (시나리오 세트·리포트 공통)
+
+`PlanItem`에 다음 필드가 추가됐습니다. 이전 세트·리포트에는 없으므로 클라이언트는 optional로 받습니다.
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `localIncomeTax` | number | `totalTax` 중 지방소득세 |
+| `startBalance` | number \| null | 계산 시작 시점 계좌 총액. 실업급여·잉여 적립 항목은 `null` |
+| `annuityLimit` | `AnnuityLimit` \| null | 연금계좌(DC·IRP·연금저축)만. 일시금으로 받은 계좌·비연금 계좌는 `null` |
+
+`AnnuityLimit`: `baseYear, legacy, years: [{ year, receiptYear, openingBalance, limit, planned }], exceededYears`.
+
+- 한도 = 연초 평가액 ÷ (11 − 연금수령연차) × 120%(소득세법 시행령 제40조의2). `years`는 10년차 또는 잔액 소진까지만 담습니다.
+- 가입일을 모르므로 max(만 55세가 되는 해, 계산 시작 해)를 1년차로 봅니다(구계좌 연금저축은 6년차). 실제보다 연차를 같거나 작게 잡아 한도를 보수적으로 계산합니다.
+- `planned`는 그해 연금수령 방식으로 꺼낸 세전 합계입니다. 한도를 넘는 해(`exceededYears`)는 운영 메모로 경고만 하고, 세금은 연금수령 세율 그대로 둡니다.
+
+`YearRow.localIncomeTax`, `ScenarioSummary.localIncomeTax`도 추가됐습니다. 엔진의 모든 세율이 지방소득세(국세의 10%)를 포함하므로 지방소득세 = 세금 ÷ 11입니다. 값이 없는 이전 데이터는 화면·PDF·엑셀이 같은 식으로 계산해 보여 줍니다.
+
 ## 결제 `/api/payments`
 
 | Method | Path | 요청 | 응답 `data` |

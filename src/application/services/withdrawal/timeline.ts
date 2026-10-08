@@ -31,6 +31,23 @@ export const indexOfAge = (birthYear: number, age: number): number =>
 export const currentYm = (now: Date): string =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
+/** 오름차순 연도를 "2027~2030년, 2033년"으로 묶는다 */
+export const yearRanges = (years: number[]): string => {
+  const ranges: string[] = [];
+  let start = years[0]!;
+  let prev = start;
+  for (const year of [...years.slice(1), Number.NaN]) {
+    if (year === prev + 1) {
+      prev = year;
+      continue;
+    }
+    ranges.push(start === prev ? `${start}년` : `${start}~${prev}년`);
+    start = year;
+    prev = year;
+  }
+  return ranges.join(", ");
+};
+
 /** 연 수익률 → 월 복리 수익률 */
 export const monthlyRate = (annualRate: number): number =>
   Math.pow(1 + annualRate, 1 / 12) - 1;

@@ -19,6 +19,7 @@ import {
   type StrategyDef,
 } from "./strategies.js";
 import {
+  annuityLimitOf,
   annuityMinAge,
   deferredRatioOf,
   interestTaxRate,
@@ -28,6 +29,7 @@ import {
   overThresholdExtraTax,
   privatePensionRateOf,
   retirementTaxRateOf,
+  splitLocalTax,
 } from "./tax.js";
 import {
   ageAtIndex,
@@ -35,12 +37,15 @@ import {
   indexToYm,
   monthlyRate,
   yearOfIndex,
+  yearRanges,
   ymToIndex,
 } from "./timeline.js";
 import {
   SCENARIO_TYPES,
   type AccountCheck,
   type AccountKind,
+  type AnnuityLimit,
+  type AnnuityLimitYear,
   type EngineAccount,
   type EngineAssumptions,
   type EngineInput,
@@ -95,6 +100,8 @@ interface Pool {
   /** A안 일시금 처리 후 세후 현금으로 바뀐 계좌 */
   converted: boolean;
   stats: PoolStats;
+  /** 연금계좌의 연도별 연초 평가액과 연금수령 방식 세전 인출액 */
+  limitYears: Map<number, { openingBalance: number; planned: number }>;
 }
 
 interface TakeResult {
@@ -151,6 +158,7 @@ const initPool = (account: EngineAccount): Pool => {
     firstAnnuityIndex: null,
     converted: false,
     stats: emptyStats(),
+    limitYears: new Map(),
   };
   const balance = Math.max(0, account.balance);
   switch (account.accountType) {
@@ -196,6 +204,7 @@ const syntheticCashPool = (): Pool => ({
   firstAnnuityIndex: null,
   converted: false,
   stats: emptyStats(),
+  limitYears: new Map(),
 });
 
 interface TakeContext {
@@ -299,6 +308,10 @@ const takeFromPool = (
     s.tax += result.tax;
     s.net += result.net;
     s.activeMonths.add(ctx.index);
+    if (ctx.mode === "annuity") {
+      const entry = pool.limitYears.get(yearOfIndex(ctx.index));
+      if (entry) entry.planned += result.gross;
+    }
   }
   return result;
 };
@@ -440,6 +453,14 @@ const simulateScenario = (
     const year = yearOfIndex(idx);
     const interestTax =
       idx > startIdx ? pools.reduce((sum, p) => sum + growPool(p, mRate), 0) : 0;
+
+    // 연금수령한도 평가액: 첫해는 시작 시점, 이후는 1월 잔액
+    if (idx === startIdx || idx % 12 === 0) {
+      for (const pool of pools) {
+        if (!PENSION_KINDS.has(pool.kind) || pool.converted) continue;
+        pool.limitYears.set(year, { openingBalance: balanceOf(pool), planned: 0 });
+      }
+    }
 
     const yearsElapsed = Math.floor((idx - startIdx) / 12);
     const inflation = Math.pow(1 + assumptions.inflationRate, yearsElapsed);
@@ -633,6 +654,7 @@ const simulateScenario = (
       healthPremium: 0,
       grossWithdrawal: 0,
       tax: 0,
+      localIncomeTax: 0,
       netWithdrawal: 0,
       shortfall: 0,
       endingBalance: 0,
@@ -662,6 +684,7 @@ const simulateScenario = (
     healthPremium: round(row.healthPremium),
     grossWithdrawal: round(row.grossWithdrawal),
     tax: round(row.tax),
+    localIncomeTax: splitLocalTax(round(row.tax)).localIncomeTax,
     netWithdrawal: round(row.netWithdrawal),
     shortfall: round(row.shortfall),
     endingBalance: round(row.endingBalance),
@@ -674,6 +697,7 @@ const simulateScenario = (
   const summary = {
     grossWithdrawal: netWithdrawal + totalTax,
     totalTax,
+    localIncomeTax: splitLocalTax(totalTax).localIncomeTax,
     netWithdrawal,
     depletionAge:
       firstShortfallIdx >= 0
@@ -763,6 +787,40 @@ interface PlanBuildArgs {
 const ymOrNull = (index: number | null): string | null =>
   index === null ? null : indexToYm(index);
 
+/**
+ * 연차별 연금수령한도와 계획 인출. 가입일을 모르므로 max(만 55세가 되는 해, 시작 해)를
+ * 1년차로 본다 — 실제보다 연차가 같거나 작아 한도를 낮게 잡는다.
+ */
+const annuityLimitOfPool = (pool: Pool, input: EngineInput): AnnuityLimit | null => {
+  if (!PENSION_KINDS.has(pool.kind) || pool.converted || pool.account === null) return null;
+  const legacy = pool.kind === "PENSION_SAVINGS" && pool.account.pensionSavingsLegacy === true;
+  const baseYear = Math.max(
+    input.birthYear + annuityMinAge,
+    yearOfIndex(ymToIndex(input.startYm)),
+  );
+  const firstReceiptYear = legacy ? PENSION_INCOME_TAX_RULES.legacyStartReceiptYear : 1;
+  const years: AnnuityLimitYear[] = [];
+  for (const [year, entry] of pool.limitYears) {
+    if (year < baseYear) continue;
+    const receiptYear = firstReceiptYear + (year - baseYear);
+    const limit = annuityLimitOf(entry.openingBalance, receiptYear);
+    if (limit === null || entry.openingBalance <= 0.5) break;
+    years.push({
+      year,
+      receiptYear,
+      openingBalance: round(entry.openingBalance),
+      limit: round(limit),
+      planned: round(entry.planned),
+    });
+  }
+  return {
+    baseYear,
+    legacy,
+    years,
+    exceededYears: years.filter((y) => y.planned > y.limit).map((y) => y.year),
+  };
+};
+
 const buildPlanItems = ({
   strategy,
   pools,
@@ -788,6 +846,9 @@ const buildPlanItems = ({
       monthlyNet: round(unemployment.monthly),
       totalGross: round(unemployment.total),
       totalTax: 0,
+      localIncomeTax: 0,
+      startBalance: null,
+      annuityLimit: null,
       method: strategy.texts.UNEMPLOYMENT.method,
       taxNote: strategy.texts.UNEMPLOYMENT.taxNote,
       healthInsuranceNote: HEALTH_NOTES.UNEMPLOYMENT,
@@ -833,8 +894,16 @@ const buildPlanItems = ({
     if (s.earlyNonAnnuity) {
       cautions.push("55세 전 인출은 연금외수령으로 과세됩니다(기타소득세 16.5% 또는 퇴직소득세).");
     }
-    if (s.annuity) {
-      cautions.push("연금수령한도(평가액÷(11−연차)×120%)를 넘는 금액은 연금외수령으로 과세될 수 있습니다.");
+    const annuityLimit = annuityLimitOfPool(pool, input);
+    if (annuityLimit?.years.some((y) => y.planned > 0)) {
+      cautions.push(
+        `가입일을 모르므로 ${annuityLimit.baseYear}년을 연금수령 ${annuityLimit.years[0]!.receiptYear}년차로 보고 연금수령한도를 보수 계산했습니다.`,
+      );
+      if (annuityLimit.exceededYears.length > 0) {
+        cautions.push(
+          `${yearRanges(annuityLimit.exceededYears)} 계획 인출이 연금수령한도를 넘어 초과분은 연금외수령으로 과세될 수 있습니다(계산은 연금수령 세율 기준).`,
+        );
+      }
     }
     if (account?.isaMaturityYm) {
       cautions.push(`ISA 만기 ${account.isaMaturityYm} — 만기 후 60일 이내 전환 여부를 정하세요.`);
@@ -852,6 +921,7 @@ const buildPlanItems = ({
     if (lump) cautions.push("일시금 세후 금액은 현금으로 보유하며 생활비로 사용합니다.");
 
     const months = Math.max(1, s.activeMonths.size);
+    const totalTax = round(lump ? s.lumpTax : s.tax);
     items.push({
       accountId: account?.id ?? null,
       accountType: pool.kind,
@@ -863,7 +933,10 @@ const buildPlanItems = ({
       monthlyGross: lump ? round(s.lumpGross) : round(s.gross / months),
       monthlyNet: lump ? round(s.lumpGross - s.lumpTax) : round(s.net / months),
       totalGross: round(lump ? s.lumpGross : s.gross),
-      totalTax: round(lump ? s.lumpTax : s.tax),
+      totalTax,
+      localIncomeTax: splitLocalTax(totalTax).localIncomeTax,
+      startBalance: account?.balance ?? null,
+      annuityLimit,
       method: isSynthetic ? "연금·소득이 생활비보다 많은 달의 잉여를 적립해 사용" : text.method,
       taxNote: text.taxNote,
       healthInsuranceNote: HEALTH_NOTES[pool.kind],

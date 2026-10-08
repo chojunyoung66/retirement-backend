@@ -1,7 +1,14 @@
 import { generateScenarioSet, recommendScenario } from "./engine.js";
 import { assessDependent, dependentStatusOf } from "./dependent.js";
 import { isaTransferOf } from "./isa-transfer.js";
-import { deferredRatioOf, privatePensionRateOf, retirementTaxRateOf } from "./tax.js";
+import { calculateRetirementIncomeTax } from "../calculators/severance-pay.calculator.js";
+import {
+  annuityLimitOf,
+  deferredRatioOf,
+  privatePensionRateOf,
+  retirementTaxRateOf,
+  splitLocalTax,
+} from "./tax.js";
 import { addMonths, ageAtIndex, indexOfAge, indexToYm, ymToIndex } from "./timeline.js";
 import type { EngineAccount, EngineInput } from "./types.js";
 
@@ -92,6 +99,20 @@ describe("tax helpers", () => {
     expect(short).toBeGreaterThan(0);
     expect(short).toBeLessThan(1);
     expect(long).toBeLessThan(short);
+  });
+
+  it("지방소득세 포함 세액을 소득세와 지방소득세(국세의 10%)로 나눈다", () => {
+    expect(splitLocalTax(1_100_000)).toEqual({ incomeTax: 1_000_000, localIncomeTax: 100_000 });
+    expect(splitLocalTax(0)).toEqual({ incomeTax: 0, localIncomeTax: 0 });
+    const { incomeTax, localIncomeTax } = splitLocalTax(17_220_001);
+    expect(incomeTax + localIncomeTax).toBe(17_220_001);
+  });
+
+  it("연금수령한도는 평가액÷(11−연차)×120%이고 11년차부터 없다", () => {
+    expect(annuityLimitOf(100_000_000, 1)).toBeCloseTo(12_000_000);
+    expect(annuityLimitOf(100_000_000, 6)).toBeCloseTo(24_000_000);
+    expect(annuityLimitOf(100_000_000, 10)).toBeCloseTo(120_000_000);
+    expect(annuityLimitOf(100_000_000, 11)).toBeNull();
   });
 });
 
@@ -403,6 +424,101 @@ describe("generateScenarioSet (고도화)", () => {
     expect(recommended).toHaveLength(1);
     expect(recommended[0].type).toBe(set.recommendedType);
     expect(set.recommendationNote).toContain("추천합니다");
+  });
+});
+
+describe("generateScenarioSet (계좌 총액·연금수령한도)", () => {
+  it("계좌 항목에 시작 시점 총액을 담고 실업급여·잉여 적립은 비운다", () => {
+    const d = scenarioOf("D");
+    expect(d.planItems.find((p) => p.accountType === "DC")?.startBalance).toBe(300_000_000);
+    expect(d.planItems.find((p) => p.accountType === "UNEMPLOYMENT")?.startBalance).toBeNull();
+  });
+
+  it("첫해 한도는 시작 잔액의 12%이고 10년차까지만 담는다", () => {
+    const dc = scenarioOf("B").planItems.find((p) => p.accountType === "DC")!;
+    const limit = dc.annuityLimit!;
+    expect(limit.baseYear).toBe(2026);
+    expect(limit.legacy).toBe(false);
+    expect(limit.years[0]).toMatchObject({
+      year: 2026,
+      receiptYear: 1,
+      openingBalance: 300_000_000,
+      limit: 36_000_000,
+    });
+    expect(limit.years[0].planned).toBeGreaterThan(0);
+    expect(limit.years[limit.years.length - 1].receiptYear).toBeLessThanOrEqual(10);
+    expect(limit.exceededYears).toEqual([]);
+  });
+
+  it("만 55세 전에 시작하면 55세가 되는 해를 1년차로 본다", () => {
+    const dc = scenarioOf("B", persona({ birthYear: 1975 })).planItems.find(
+      (p) => p.accountType === "DC",
+    )!;
+    expect(dc.annuityLimit!.baseYear).toBe(2030);
+    expect(dc.annuityLimit!.years[0].year).toBe(2030);
+  });
+
+  it("구계좌 연금저축은 6년차부터 기산한다", () => {
+    const input = persona({
+      unemployment: null,
+      monthlyExpense: 500_000,
+      accounts: [account(1, "PENSION_SAVINGS", 100_000_000, { pensionSavingsLegacy: true })],
+    });
+    const item = scenarioOf("B", input).planItems.find((p) => p.accountType === "PENSION_SAVINGS")!;
+    expect(item.annuityLimit!.legacy).toBe(true);
+    expect(item.annuityLimit!.years[0]).toMatchObject({ receiptYear: 6, limit: 24_000_000 });
+    expect(item.annuityLimit!.years.map((y) => y.receiptYear)).toEqual([6, 7, 8, 9, 10]);
+  });
+
+  it("필요할 때 인출이 한도를 넘는 해를 찾아 운영 메모로 알린다", () => {
+    const input = persona({
+      unemployment: null,
+      nationalPension: { monthlyAmount: 0, startAge: 65, source: "none" },
+      accounts: [account(1, "PENSION_SAVINGS", 100_000_000)],
+    });
+    const item = scenarioOf("D", input).planItems.find((p) => p.accountType === "PENSION_SAVINGS")!;
+    const limit = item.annuityLimit!;
+    // 2026년은 11~12월 두 달만 인출해 첫해 한도(1,200만원) 안이다
+    expect(limit.exceededYears).not.toContain(2026);
+    expect(limit.exceededYears).toContain(2027);
+    expect(item.cautions.some((c) => c.includes("2027") && c.includes("연금수령한도를 넘어"))).toBe(
+      true,
+    );
+    expect(item.cautions.some((c) => c.includes("2026년을 연금수령 1년차"))).toBe(true);
+  });
+
+  it("A안 일시금 계좌와 비연금 계좌는 한도를 비운다", () => {
+    const a = scenarioOf("A");
+    for (const type of ["DC", "PENSION_SAVINGS", "IRP"]) {
+      expect(a.planItems.find((p) => p.accountType === type)?.annuityLimit).toBeNull();
+    }
+    const d = scenarioOf("D");
+    for (const type of ["ISA", "BROKERAGE", "CASH", "UNEMPLOYMENT"]) {
+      expect(d.planItems.find((p) => p.accountType === type)?.annuityLimit).toBeNull();
+    }
+  });
+});
+
+describe("generateScenarioSet (지방소득세 분리)", () => {
+  const set = generateScenarioSet(persona());
+
+  it("항목·연도·요약 모두 지방소득세가 세금의 1/11이다", () => {
+    for (const s of set.scenarios) {
+      expect(s.summary.localIncomeTax).toBe(splitLocalTax(s.summary.totalTax).localIncomeTax);
+      for (const row of s.yearly) {
+        expect(row.localIncomeTax).toBe(Math.round(row.tax / 11));
+      }
+      for (const item of s.planItems) {
+        expect(item.localIncomeTax).toBe(Math.round(item.totalTax / 11));
+      }
+    }
+  });
+
+  it("퇴직소득 일시금의 지방소득세는 퇴직소득세 계산기와 1원 이내로 같다", () => {
+    const dc = scenarioOf("A").planItems.find((p) => p.accountType === "DC")!;
+    const calculated = calculateRetirementIncomeTax(300_000_000, 25);
+    expect(dc.totalTax).toBe(calculated.totalTax);
+    expect(Math.abs(dc.localIncomeTax - calculated.localIncomeTax)).toBeLessThanOrEqual(1);
   });
 });
 

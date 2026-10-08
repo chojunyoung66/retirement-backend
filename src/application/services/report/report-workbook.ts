@@ -1,7 +1,12 @@
 import ExcelJS from "exceljs";
 import { DEPENDENT_REASON_LABEL, DEPENDENT_STATUS_LABEL } from "../withdrawal/dependent.js";
 import { ACTION_LABEL, type ReportContent } from "./report-content.js";
-import { assumptionRows, inputSummaryRows } from "./report-labels.js";
+import {
+  assumptionRows,
+  exceededYearsText,
+  inputSummaryRows,
+  localTaxOf,
+} from "./report-labels.js";
 
 /** 원본 샘플 엑셀의 시트 이름을 따른다 */
 export const SHEET = {
@@ -9,6 +14,7 @@ export const SHEET = {
   input: "입력값_가정",
   comparison: "시나리오_요약",
   plan: "계좌별_실행안",
+  annuityLimit: "연금수령한도",
   yearly: "연도별현금흐름",
   monthly: "월별현금흐름",
   basis: "출처_기준일",
@@ -103,6 +109,7 @@ export const buildReportWorkbook = (content: ReportContent): ExcelJS.Workbook =>
       rows: [
         ["세전 총 인출", summary.grossWithdrawal],
         ["추정 세금 합계", summary.totalTax],
+        ["지방소득세(세금 합계에 포함)", localTaxOf(summary.totalTax, summary.localIncomeTax)],
         ["세후 총 인출", summary.netWithdrawal],
         ["자산 소진 나이", summary.depletionAge === null ? "계산 기간 내 소진 없음" : `${summary.depletionAge}세`],
         ["부족 시작", summary.firstShortfallYm ?? "없음"],
@@ -137,6 +144,7 @@ export const buildReportWorkbook = (content: ReportContent): ExcelJS.Workbook =>
       { header: "추천", width: 6 },
       { header: "세전 총 인출", width: 16, won: true },
       { header: "추정 세금", width: 14, won: true },
+      { header: "지방소득세(포함)", width: 14, won: true },
       { header: "세후 총 인출", width: 16, won: true },
       { header: "자산 소진 나이", width: 14 },
       { header: "부족 개월", width: 10 },
@@ -149,6 +157,7 @@ export const buildReportWorkbook = (content: ReportContent): ExcelJS.Workbook =>
       row.recommended ? "추천" : "",
       row.summary.grossWithdrawal,
       row.summary.totalTax,
+      localTaxOf(row.summary.totalTax, row.summary.localIncomeTax),
       row.summary.netWithdrawal,
       row.summary.depletionAge ?? "없음",
       row.summary.shortfallMonths,
@@ -170,6 +179,10 @@ export const buildReportWorkbook = (content: ReportContent): ExcelJS.Workbook =>
       { header: "월 평균 세후", width: 14, won: true },
       { header: "총 세전", width: 16, won: true },
       { header: "총 세금", width: 14, won: true },
+      { header: "지방소득세(포함)", width: 14, won: true },
+      { header: "시작 총액", width: 16, won: true },
+      { header: "첫해 수령한도", width: 16, won: true },
+      { header: "한도 초과 연도", width: 18 },
       { header: "실행 방법", width: 40 },
       { header: "세금", width: 40 },
       { header: "건강보험", width: 40 },
@@ -185,12 +198,45 @@ export const buildReportWorkbook = (content: ReportContent): ExcelJS.Workbook =>
       item.monthlyNet,
       item.totalGross,
       item.totalTax,
+      localTaxOf(item.totalTax, item.localIncomeTax),
+      // 고도화 이전 리포트에는 계좌 총액·수령한도가 없다
+      item.startBalance ?? null,
+      item.annuityLimit?.years[0]?.limit ?? null,
+      item.annuityLimit ? exceededYearsText(item.annuityLimit) : "",
       item.method,
       item.taxNote,
       item.healthInsuranceNote,
       item.cautions.join(" / "),
     ]),
   );
+
+  const limitRows = scenario.planItems.flatMap((item) =>
+    (item.annuityLimit?.years ?? []).map((year) => [
+      item.label,
+      year.year,
+      `${year.receiptYear}년차`,
+      year.openingBalance,
+      year.limit,
+      year.planned,
+      year.planned > year.limit ? "초과" : "",
+    ]),
+  );
+  if (limitRows.length > 0) {
+    addTableSheet(
+      workbook,
+      SHEET.annuityLimit,
+      [
+        { header: "계좌", width: 18 },
+        { header: "연도", width: 8 },
+        { header: "연차", width: 8 },
+        { header: "연초 평가액", width: 16, won: true },
+        { header: "수령한도", width: 16, won: true },
+        { header: "계획 인출(세전)", width: 16, won: true },
+        { header: "초과 여부", width: 10 },
+      ],
+      limitRows,
+    );
+  }
 
   addTableSheet(
     workbook,
@@ -205,6 +251,7 @@ export const buildReportWorkbook = (content: ReportContent): ExcelJS.Workbook =>
       { header: "건강보험료", width: 14, won: true },
       { header: "세전 인출", width: 16, won: true },
       { header: "세금", width: 14, won: true },
+      { header: "지방소득세(포함)", width: 14, won: true },
       { header: "세후 인출", width: 16, won: true },
       { header: "부족", width: 14, won: true },
       { header: "연말 잔액", width: 16, won: true },
@@ -222,6 +269,7 @@ export const buildReportWorkbook = (content: ReportContent): ExcelJS.Workbook =>
       row.healthPremium ?? 0,
       row.grossWithdrawal,
       row.tax,
+      localTaxOf(row.tax, row.localIncomeTax),
       row.netWithdrawal,
       row.shortfall,
       row.endingBalance,
