@@ -80,7 +80,7 @@ firstDownloadedAt|null, updatedAt, isOutdated`.
 | Method | Path | 요청 | 응답 `data` |
 |--------|------|------|------|
 | POST | `/api/reports/:id/execution-plan` | — | `ExecutionPlan` (새로 만들면 201, 있으면 200) |
-| GET | `/api/reports/:id/execution-plan` | — | `ExecutionPlan` 또는 `EXECUTION_PLAN_NOT_FOUND` 404 |
+| GET | `/api/reports/:id/execution-plan` | — | `ExecutionPlan`, 아직 시작하지 않았으면 `null` (200) |
 | PATCH | `/api/execution-plans/:id/items/:key` | `{ done: boolean }` | `ExecutionPlan` |
 
 `ExecutionPlan`: `id, reportId, startDate, items: [{ key, label, dueDay(1~100), doneAt|null }],
@@ -121,7 +121,7 @@ progress: { done, total, currentDay(1~100) }`. 항목 키는 `^[a-z0-9-]{1,40}$`
 | `REVIEW_LIMIT` | 409 | 처리 중 요청 3건 초과 |
 | `REVIEW_NOT_CANCELABLE` | 409 | 답변·종료·취소된 요청 취소 |
 | `REVIEW_CANCELED` | 409 | 운영자가 취소된 요청 상태 변경 |
-| `EXECUTION_PLAN_NOT_FOUND` | 404 | 아직 시작하지 않음 |
+| `EXECUTION_PLAN_NOT_FOUND` | 404 | 항목 체크 시 없는 실행 계획 ID |
 | `EXECUTION_ITEM_NOT_FOUND` | 404 | 없는 항목 키 |
 | `OPERATOR_ONLY` | 403 | 운영자 API에 일반 사용자 접근 |
 

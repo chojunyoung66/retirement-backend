@@ -77,17 +77,11 @@ export const createExecutionPlanService = (
       }
     },
 
-    async getByReport(userId: number, reportId: number): Promise<ExecutionPlanView> {
+    /** 아직 시작하지 않았으면 null — 리포트 화면이 매번 조회하므로 404로 응답하지 않는다 */
+    async getByReport(userId: number, reportId: number): Promise<ExecutionPlanView | null> {
       await findOwnedReport(reportId, userId);
       const plan = await executionPlanRepo.findByReportId(reportId);
-      if (!plan) {
-        throw new BusinessException(
-          "EXECUTION_PLAN_NOT_FOUND",
-          "아직 100일 실행을 시작하지 않았습니다",
-          404,
-        );
-      }
-      return toView(plan);
+      return plan ? toView(plan) : null;
     },
 
     async setItemDone(

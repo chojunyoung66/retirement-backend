@@ -94,10 +94,7 @@ describe("ExecutionPlanService", () => {
     expect(executionProgress(plan, new Date(START.getTime() + 150 * day)).currentDay).toBe(100);
   });
 
-  it("시작 전이면 404", async () => {
-    await expect(setup().service.getByReport(1, 5)).rejects.toMatchObject({
-      code: "EXECUTION_PLAN_NOT_FOUND",
-      statusCode: 404,
-    });
+  it("시작 전이면 null", async () => {
+    await expect(setup().service.getByReport(1, 5)).resolves.toBeNull();
   });
 });
